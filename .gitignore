@@ -1,0 +1,13 @@
+
+.vs/TetrisAI/v15/.suo
+*.db
+*.ipch
+*.xml
+*.obj
+*.tlog
+*.log
+*.exe
+*.lastcodeanalysissucceeded
+*.ilk
+*.pdb
+*.idb
