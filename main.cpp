@@ -3,9 +3,9 @@
 #include "arraybuffer.hpp"
 #include "indexbuffer.hpp"
 #include "texture2d.h"
-#include "tetrimino.h"
 #include "program.h"
 #include "shader.h"
+#include "tetris.h"
 #include "glfw.h"
 
 #include <exception>
@@ -64,8 +64,8 @@ int main()
         shaderProgram.setTextureUniform("uBlock", blockTexture.number());
         blockTexture.makeActive();
 
-        // Test rotation of all tetrimino types and adjust centres
-        T tetrimino(Position<int>{ 4, 4 });
+        // Test rotation of all tetrimino types and adjust centres if needed
+        Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 4 });
 
         while (!window.shouldClose())
         {
@@ -74,7 +74,7 @@ int main()
             // break all of this up into a draw function for tetriminos
             shaderProgram.setUniform("uColour", tetrimino.colour());
 
-            const Blocks& tetriminoBlocks = tetrimino.blocks();
+            const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
             {
                 vertices[0] = static_cast<float>(blockTopLeft.x);

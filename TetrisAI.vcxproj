@@ -82,7 +82,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="program.cpp" />
     <ClCompile Include="shader.cpp" />
-    <ClCompile Include="tetrimino.cpp" />
+    <ClCompile Include="tetris.cpp" />
     <ClCompile Include="texture2d.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -91,10 +91,11 @@
     <ClInclude Include="glfw.h" />
     <ClInclude Include="GLFW\glfw3.h" />
     <ClInclude Include="indexbuffer.hpp" />
+    <ClInclude Include="position.hpp" />
     <ClInclude Include="program.h" />
     <ClInclude Include="shader.h" />
     <ClInclude Include="STBImage\stb_image.h" />
-    <ClInclude Include="tetrimino.h" />
+    <ClInclude Include="tetris.h" />
     <ClInclude Include="texture2d.h" />
   </ItemGroup>
   <ItemGroup>

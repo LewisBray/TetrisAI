@@ -2,12 +2,15 @@
 
 #include "GLEW\\glew.h"
 
+#include <type_traits>
 #include <utility>
 #include <array>
 
 template <typename T, std::size_t Size>
 class ArrayBuffer
 {
+    static_assert(std::is_arithmetic_v<T>, "ArrayBuffer must be of numeric type");
+
 public:
     explicit ArrayBuffer(const std::array<T, Size>& data)
         : data_{ data }

@@ -2,12 +2,15 @@
 
 #include "GLEW\\glew.h"
 
+#include <type_traits>
 #include <utility>
 #include <array>
 
 template <typename T, std::size_t Size>
 class IndexBuffer
 {
+    static_assert(std::is_arithmetic_v<T>, "IndexBuffer must be of numeric type");
+
 public:
     explicit IndexBuffer(const std::array<T, Size>& data)
         : data_{ data }
