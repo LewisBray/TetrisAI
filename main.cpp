@@ -12,14 +12,25 @@
 
 #include <exception>
 #include <iostream>
+#include <random>
 #include <chrono>
 
-std::chrono::milliseconds currentTime() noexcept
+static std::chrono::milliseconds currentTime()
 {
 	using namespace std::chrono;
 
 	const auto clockTime = steady_clock().now();
 	return duration_cast<milliseconds>(clockTime.time_since_epoch());
+}
+
+static int generateRandomIndex(const int lastIndex)
+{
+	const std::chrono::milliseconds time = currentTime();
+	const std::uint32_t rngSeed = static_cast<std::uint32_t>(time.count());
+	std::minstd_rand rng(rngSeed);
+	const std::uniform_int_distribution<int> uniformDist(0, lastIndex);
+
+	return uniformDist(rng);
 }
 
 int main()
@@ -91,7 +102,7 @@ int main()
         blockTexture.makeActive();
 
 		Tetris::Grid grid;
-        Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 4 });
+        Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
 
 		int updatesSinceLastDrop = 0;
 		std::chrono::milliseconds accumulatedTime{ 0 };
@@ -134,7 +145,9 @@ int main()
 						for (const Position<int>& block : tetriminoBlocks)
 							grid[block.y][block.x] = tetriminoColour;
 
-						tetrimino = Tetris::Tetrimino(Tetris::Tetrimino::Type::T, Position<int>{4, 4});
+						const Tetris::Tetrimino::Type nextType =
+							static_cast<Tetris::Tetrimino::Type>(generateRandomIndex(6));
+						tetrimino = Tetris::Tetrimino(nextType, Position<int>{ 4, 2 });
 					}
 
 					if (updatesSinceLastDrop >= 60)
