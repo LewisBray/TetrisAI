@@ -104,6 +104,7 @@ int main()
 		Tetris::Grid grid;
         Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
 
+		PlayerInput previousInput;
 		int updatesSinceLastDrop = 0;
 		std::chrono::milliseconds accumulatedTime{ 0 };
 		std::chrono::milliseconds previousTime = currentTime();
@@ -119,21 +120,27 @@ int main()
 				const PlayerInput playerInput = getPlayerInput(window);
 
 				// Update Tetrimino position, need to prevent holding keys down...
-				if (playerInput.left == KeyState::Pressed)
+				if ((playerInput.left == KeyState::Pressed &&
+					previousInput.left != KeyState::Pressed) ||
+					playerInput.left == KeyState::Held)
 				{
 					tetrimino.shift({ -1, 0 });
 					if (tetrimino.collides(grid))
 						tetrimino.shift({ 1, 0 });
 				}
 
-				if (playerInput.right == KeyState::Pressed)
+				if ((playerInput.right == KeyState::Pressed &&
+					previousInput.right != KeyState::Pressed) ||
+					playerInput.right == KeyState::Held)
 				{
 					tetrimino.shift({ 1, 0 });
 					if (tetrimino.collides(grid))
 						tetrimino.shift({ -1, 0 });
 				}
 
-				if (playerInput.down == KeyState::Pressed ||
+				if ((playerInput.down == KeyState::Pressed &&
+					previousInput.down != KeyState::Pressed) ||
+					playerInput.down == KeyState::Held ||
 					updatesSinceLastDrop >= 120)	// ~2 seconds per drop for now...
 				{									// ...make var for this later
 					tetrimino.shift({ 0, 1 });
@@ -154,7 +161,9 @@ int main()
 						updatesSinceLastDrop = 0;
 				}
 
-				if (playerInput.rotateClockwise == KeyState::Pressed)
+				if ((playerInput.rotateClockwise == KeyState::Pressed &&
+					previousInput.rotateClockwise != KeyState::Pressed) ||
+					playerInput.rotateClockwise == KeyState::Held)
 				{
 					tetrimino.rotateClockwise();
 
@@ -166,7 +175,9 @@ int main()
 					}
 				}
 
-				if (playerInput.rotateAntiClockwise == KeyState::Pressed)
+				if ((playerInput.rotateAntiClockwise == KeyState::Pressed &&
+					previousInput.rotateAntiClockwise != KeyState::Pressed) ||
+					previousInput.rotateAntiClockwise == KeyState::Held)
 				{
 					tetrimino.rotateAntiClockwise();
 
