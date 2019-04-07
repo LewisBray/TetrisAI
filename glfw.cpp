@@ -15,17 +15,12 @@ namespace GLFW
         glfwTerminate();
     }
 
-    void pollEvents() noexcept
-    {
-        glfwPollEvents();
-    }
-
     Window::Window(const int width, const int height, const std::string& title)
         : window_{ glfwCreateWindow(width, height, title.c_str(), NULL, NULL) }
     {
         if (window_ == nullptr)
             throw std::exception{ "Failed to create window" };
-    }
+	}
 
     bool Window::shouldClose() const noexcept
     {
@@ -41,4 +36,17 @@ namespace GLFW
     {
         glfwMakeContextCurrent(window_);
     }
+
+	KeyState Window::getKeyState(char key) const noexcept
+	{
+		key = std::toupper(key);
+		const int state = glfwGetKey(window_, key);
+
+		return (state == GLFW_PRESS) ? KeyState::Pressed : KeyState::Released;
+	}
+
+	void pollEvents() noexcept
+	{
+		glfwPollEvents();
+	}
 }

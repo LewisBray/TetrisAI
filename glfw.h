@@ -2,6 +2,8 @@
 
 #include "GLFW\\glfw3.h"
 
+#include "keystate.h"
+
 #include <string>
 
 namespace GLFW
@@ -12,8 +14,6 @@ namespace GLFW
         GLFW();
         ~GLFW() noexcept;
     };
-
-    void pollEvents() noexcept;
 
     class Window
     {
@@ -30,8 +30,11 @@ namespace GLFW
         bool shouldClose() const noexcept;
         void swapBuffers() const noexcept;
         void makeCurrentContext() const noexcept;
+		KeyState getKeyState(char key) const noexcept;
 
     private:
         GLFWwindow* window_ = nullptr;
     };
+
+    void pollEvents() noexcept;
 }

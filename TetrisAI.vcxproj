@@ -14,19 +14,19 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{78B283BF-3093-4609-AE97-05B4637DCC57}</ProjectGuid>
     <RootNamespace>TetrisAI</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -80,6 +80,7 @@
   <ItemGroup>
     <ClCompile Include="glfw.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="playerinput.cpp" />
     <ClCompile Include="program.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="tetris.cpp" />
@@ -87,10 +88,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="arraybuffer.hpp" />
+    <ClInclude Include="colour.h" />
     <ClInclude Include="GLEW\glew.h" />
     <ClInclude Include="glfw.h" />
     <ClInclude Include="GLFW\glfw3.h" />
     <ClInclude Include="indexbuffer.hpp" />
+    <ClInclude Include="keystate.h" />
+    <ClInclude Include="playerinput.h" />
     <ClInclude Include="position.hpp" />
     <ClInclude Include="program.h" />
     <ClInclude Include="shader.h" />

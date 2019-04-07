@@ -11,3 +11,6 @@
 *.ilk
 *.pdb
 *.idb
+.vs/TetrisAI/v16/.suo
+*.opendb
+x64/Debug/TetrisAI.vcxproj.FileListAbsolute.txt

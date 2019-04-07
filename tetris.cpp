@@ -6,7 +6,6 @@
 #include <sstream>
 #include <map>
 
-
 namespace Tetris
 {
     // This could be a map but then it can't be constexpr and we would have to
@@ -18,14 +17,16 @@ namespace Tetris
         {
         case Tetrimino::Type::T:        return Purple;
         case Tetrimino::Type::L:        return Cyan;
-        case Tetrimino::Type::RL:       return Blue;
+        case Tetrimino::Type::RL:       return Green;
         case Tetrimino::Type::S:        return Red;
-        case Tetrimino::Type::Z:        return Green;
+        case Tetrimino::Type::Z:        return Blue;
         case Tetrimino::Type::Square:   return Yellow;
         case Tetrimino::Type::Long:     return White;
 
         default:
-            throw std::exception{ "Invalid Tetrimino type in pieceColour" };
+            throw std::exception {
+				"Invalid Tetrimino type in function 'pieceColour'"
+			};
         }
     }
 
@@ -56,7 +57,9 @@ namespace Tetris
             return topLeft + Position<float>{ 0.0f, 1.0f };
 
         default:
-            throw std::exception{ "Invalid Tetrimino type used in centreLocation" };
+            throw std::exception {
+				"Invalid Tetrimino type used in function 'centreLocation'"
+			};
         }
     }
 
@@ -66,7 +69,7 @@ namespace Tetris
         switch (type)
         {
         case Tetrimino::Type::T:
-            return Blocks {
+            return {
                 topLeft + Position<int>{ 1, 0 },
                 topLeft + Position<int>{ 0, 1 },
                 topLeft + Position<int>{ 1, 1 },
@@ -74,7 +77,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::L:
-            return Blocks {
+            return {
                 topLeft,
                 topLeft + Position<int>{ 0, 1 },
                 topLeft + Position<int>{ 0, 2 },
@@ -82,7 +85,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::RL:
-            return Blocks {
+            return {
                 topLeft + Position<int>{ 1, 0 },
                 topLeft + Position<int>{ 1, 1 },
                 topLeft + Position<int>{ 1, 2 },
@@ -90,7 +93,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::S:
-            return Blocks {
+            return {
                 topLeft + Position<int>{ 1, 0 },
                 topLeft + Position<int>{ 2, 0 },
                 topLeft + Position<int>{ 0, 1 },
@@ -98,7 +101,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::Z:
-            return Blocks {
+            return {
                 topLeft,
                 topLeft + Position<int>{ 1, 0 },
                 topLeft + Position<int>{ 1, 1 },
@@ -106,7 +109,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::Square:
-            return Blocks {
+            return {
                 topLeft,
                 topLeft + Position<int>{ 1, 0 },
                 topLeft + Position<int>{ 1, 1 },
@@ -114,7 +117,7 @@ namespace Tetris
             };
 
         case Tetrimino::Type::Long:
-            return Blocks {
+            return {
                 topLeft,
                 topLeft + Position<int>{ 0, 1 },
                 topLeft + Position<int>{ 0, 2 },
@@ -122,14 +125,16 @@ namespace Tetris
             };
 
         default:
-            throw std::exception{ "Invalid Tetrimino type in blockLocations" };
+            throw std::exception {
+				"Invalid Tetrimino type in used in function 'blockLocations'"
+			};
         }
     }
 
     Tetrimino::Tetrimino(const Type type, const Position<int>& topLeft)
-        : colour_{ pieceColour(type) }
-        , blocks_{ blockLocations(type, topLeft) }
+        : blocks_{ blockLocations(type, topLeft) }
         , centre_{ centreLocation(type, topLeft) }
+        , colour_{ pieceColour(type) }
     {}
 
     void Tetrimino::rotateClockwise() noexcept
@@ -143,8 +148,8 @@ namespace Tetris
                 blockCentre.x - centre_.x + centre_.y
             };
 
-            blockTopLeft.x = static_cast<int>(rotatedBlockCentre.x);
-            blockTopLeft.y = static_cast<int>(rotatedBlockCentre.y);
+            blockTopLeft.x = static_cast<int>(std::floor(rotatedBlockCentre.x));
+            blockTopLeft.y = static_cast<int>(std::floor(rotatedBlockCentre.y));
         }
     }
 
@@ -159,63 +164,33 @@ namespace Tetris
                 -blockCentre.x + centre_.x + centre_.y
             };
 
-            blockTopLeft.x = static_cast<int>(rotatedBlockCentre.x);
-            blockTopLeft.y = static_cast<int>(rotatedBlockCentre.y);
+            blockTopLeft.x = static_cast<int>(std::floor(rotatedBlockCentre.x));
+            blockTopLeft.y = static_cast<int>(std::floor(rotatedBlockCentre.y));
         }
     }
 
-    void Tetrimino::shift(const Direction direction) noexcept
-    {
-        const Position<int> shift = std::invoke([direction]() noexcept {
-            switch (direction)
-            {
-            case Direction::Up:     return Position<int>{  0, -1 };
-            case Direction::Down:   return Position<int>{  0,  1 };
-            case Direction::Left:   return Position<int>{ -1,  0 };
-            case Direction::Right:  return Position<int>{  1,  0 };
-            default:                return Position<int>{  0,  0 };
-            }
-        });
+	void Tetrimino::shift(const Position<int>& shift) noexcept
+	{
+		for (Position<int>& block : blocks_)
+			block += shift;
 
-        for (Position<int>& block : blocks_)
-            block += shift;
+		centre_ += shift;
+	}
 
-        centre_ += shift;
-    }
+	bool Tetrimino::collides(const Grid& grid) const noexcept
+	{
+		for (const Position<int>& block : blocks_)
+		{
+			if (block.x < 0)
+				return true;
+			else if (block.x >= Columns)
+				return true;
+			else if (block.y >= Rows)
+				return true;
+			else if (grid[block.y][block.x])
+				return true;
+		}
 
-    bool Tetrimino::collidedWithBottom() const noexcept
-    {
-        for (const Position<int>& block : blocks_)
-            if (block.y >= Rows)
-                return true;
-
-        return false;
-    }
-
-    bool Tetrimino::collidedWithLeftSide() const noexcept
-    {
-        for (const Position<int>& block : blocks_)
-            if (block.x < 0)
-                return true;
-
-        return false;
-    }
-
-    bool Tetrimino::collidedWithRightSide() const noexcept
-    {
-        for (const Position<int>& block : blocks_)
-            if (block.x >= Columns)
-                return true;
-
-        return false;
-    }
-
-    bool Tetrimino::collidedWithBlock(const Grid& grid) const noexcept
-    {
-        for (const Position<int>& block : blocks_)
-            if (grid[block.x][block.y].has_value())
-                return true;
-
-        return false;
-    }
+		return false;
+	}
 }
