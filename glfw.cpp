@@ -1,6 +1,7 @@
 #include "glfw.h"
 
 #include <exception>
+#include <map>
 
 namespace GLFW
 {
@@ -8,7 +9,7 @@ namespace GLFW
     {
         if (!glfwInit())
             throw std::exception{ "Failed to initialise GLFW" };
-    }
+	}
 
     GLFW::~GLFW() noexcept
     {
@@ -20,6 +21,8 @@ namespace GLFW
     {
         if (window_ == nullptr)
             throw std::exception{ "Failed to create window" };
+	
+		glfwSetKeyCallback(window_, keyStateCallback);
 	}
 
     bool Window::shouldClose() const noexcept
@@ -37,12 +40,39 @@ namespace GLFW
         glfwMakeContextCurrent(window_);
     }
 
-	KeyState Window::getKeyState(char key) const noexcept
+	static std::map<char, KeyState> keyStates;
+
+	KeyState Window::keyState(char key) const
 	{
 		key = std::toupper(key);
-		const int state = glfwGetKey(window_, key);
+		const auto keyState = keyStates.find(key);
+		if (keyState == keyStates.end())
+		{
+			keyStates.insert({ key, KeyState::Released });
+			return KeyState::Released;
+		}
+		else
+			return keyState->second;
+	}
 
-		return (state == GLFW_PRESS) ? KeyState::Pressed : KeyState::Released;
+	void Window::keyStateCallback(GLFWwindow* const window,
+		const int key, const int scancode, const int action, const int mods)
+	{
+		const KeyState newState = std::invoke([action]() {
+			if (action == GLFW_PRESS)
+				return KeyState::Pressed;
+			else if (action == GLFW_REPEAT)
+				return KeyState::Held;
+			else
+				return KeyState::Released;
+		});
+
+		const char keyAsChar = std::toupper(static_cast<char>(key));
+		const auto prevState = keyStates.find(keyAsChar);
+		if (prevState == keyStates.end())
+			keyStates.insert({ keyAsChar, newState });
+		else
+			prevState->second = newState;
 	}
 
 	void pollEvents() noexcept

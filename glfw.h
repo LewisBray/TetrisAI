@@ -30,9 +30,12 @@ namespace GLFW
         bool shouldClose() const noexcept;
         void swapBuffers() const noexcept;
         void makeCurrentContext() const noexcept;
-		KeyState getKeyState(char key) const noexcept;
+		KeyState keyState(char key) const;
 
     private:
+		static void keyStateCallback(GLFWwindow* window,
+			int key, int scancode, int action, int mods);
+
         GLFWwindow* window_ = nullptr;
     };
 

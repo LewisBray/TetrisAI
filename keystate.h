@@ -3,5 +3,6 @@
 enum class KeyState
 {
 	Released,
-	Pressed
+	Pressed,
+	Held
 };
