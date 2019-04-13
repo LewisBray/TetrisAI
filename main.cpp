@@ -3,15 +3,14 @@
 #include "arraybuffer.hpp"
 #include "indexbuffer.hpp"
 #include "playerinput.h"
-#include "texture2d.h"
 #include "keystate.h"
-#include "program.h"
-#include "shader.h"
+#include "render.h"
 #include "tetris.h"
 #include "glfw.h"
 
 #include <exception>
 #include <iostream>
+#include <utility>
 #include <random>
 #include <chrono>
 
@@ -47,59 +46,7 @@ int main()
 
         std::cout << glGetString(GL_VERSION) << std::endl;
 
-        ArrayBuffer<float, 16> blockVertices({
-            // vertex       // texture
-            -0.5f, -0.5f,   0.0f, 0.0f,
-             0.5f, -0.5f,   1.0f, 0.0f,
-             0.5f,  0.5f,   1.0f, 1.0f,
-            -0.5f,  0.5f,   0.0f, 1.0f
-        });
-
-        blockVertices.bind();
-        blockVertices.setVertexAttribute(0, 2, GL_FLOAT,
-            4 * sizeof(float), reinterpret_cast<void*>(0));
-        blockVertices.setVertexAttribute(1, 2, GL_FLOAT,
-            4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
-
-		const auto updateBlockVertices = [&blockVertices](const Position<int>& blockTopLeft)
-		{
-			// + 0.0f here for type conversion to avoid casts
-			blockVertices[0] = blockTopLeft.x + 0.0f;
-			blockVertices[1] = blockTopLeft.y + 1.0f;
-
-			blockVertices[4] = blockTopLeft.x + 1.0f;
-			blockVertices[5] = blockTopLeft.y + 1.0f;
-
-			blockVertices[8] = blockTopLeft.x + 1.0f;
-			blockVertices[9] = blockTopLeft.y + 0.0f;
-
-			blockVertices[12] = blockTopLeft.x + 0.0f;
-			blockVertices[13] = blockTopLeft.y + 0.0f;
-		};
-
-        const IndexBuffer<unsigned, 6> blockIndices({
-            0, 1, 2,
-            2, 3, 0
-        });
-
-        blockIndices.bind();
-
-        const Shader vertexShader("vertex.shader", GL_VERTEX_SHADER);
-        const Shader fragmentShader("fragment.shader", GL_FRAGMENT_SHADER);
-
-        const Program shaderProgram;
-
-        shaderProgram.attach(vertexShader);
-        shaderProgram.attach(fragmentShader);
-
-        shaderProgram.link();
-        shaderProgram.validate();
-
-        shaderProgram.use();
-
-        const Texture2d blockTexture(0, "block.jpg", Texture2d::ImageType::JPG);
-        shaderProgram.setTextureUniform("uBlock", blockTexture.number());
-        blockTexture.makeActive();
+        BlockDrawer drawBlock;
 
 		Tetris::Grid grid;
         Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
@@ -189,20 +136,48 @@ int main()
 					}
 				}
 
+				const auto rowIsComplete = [](const std::array<std::optional<Colour>, Tetris::Columns>& row)
+				{
+					for (const std::optional<Colour>& cell : row)
+						if (!cell.has_value())
+							return false;
+
+					return true;
+				};
+
+				// Check for completed lines in grid, remove
+				// them and push remaining lines down
+				int rowToFillIn = -1;
+				for (int row = Tetris::Rows - 1; row >= -0; --row)
+				{
+                    if (rowIsComplete(grid[row]))
+					{
+						for (std::optional<Colour>& cell : grid[row])
+							cell = std::nullopt;
+						if (rowToFillIn == -1)
+							rowToFillIn = row;
+						else
+							rowToFillIn = std::max(row, rowToFillIn);
+					}
+
+					if (rowToFillIn != -1 && row < rowToFillIn)
+					{
+						for (int col = 0; col < Tetris::Columns; ++col)
+							std::swap(grid[row][col], grid[rowToFillIn][col]);
+						--rowToFillIn;
+					}
+				}
+
 				++updatesSinceLastDrop;
+				previousInput = playerInput;
 				accumulatedTime -= frameDuration;
 			}
 			
 			glClear(GL_COLOR_BUFFER_BIT);
 
-            shaderProgram.setUniform("uColour", tetrimino.colour());
             const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
-            {
-				updateBlockVertices(blockTopLeft);
-                blockVertices.bufferData(GL_STATIC_DRAW);
-                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            }
+                drawBlock(blockTopLeft, tetrimino.colour());
 
 			for (int col = 0; col < Tetris::Columns; ++col)
 			{
@@ -211,12 +186,9 @@ int main()
 					const std::optional<Colour>& cell = grid[row][col];
 					if (!cell.has_value())
 						continue;
-
-					shaderProgram.setUniform("uColour", cell.value());
-					const Position<int> blockTopLeft{ col, row };
-					updateBlockVertices(blockTopLeft);
-					blockVertices.bufferData(GL_STATIC_DRAW);
-					glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+					
+                    const Position<int> blockTopLeft{ col, row };
+                    drawBlock(blockTopLeft, cell.value());
 				}
 			}
         

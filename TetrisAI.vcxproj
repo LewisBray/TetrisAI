@@ -78,6 +78,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="render.cpp" />
     <ClCompile Include="glfw.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="playerinput.cpp" />
@@ -89,6 +90,7 @@
   <ItemGroup>
     <ClInclude Include="arraybuffer.hpp" />
     <ClInclude Include="colour.h" />
+    <ClInclude Include="render.h" />
     <ClInclude Include="GLEW\glew.h" />
     <ClInclude Include="glfw.h" />
     <ClInclude Include="GLFW\glfw3.h" />
