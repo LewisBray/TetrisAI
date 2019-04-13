@@ -81,7 +81,7 @@
     <ClCompile Include="render.cpp" />
     <ClCompile Include="glfw.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="playerinput.cpp" />
+    <ClCompile Include="input.cpp" />
     <ClCompile Include="program.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="tetris.cpp" />
@@ -96,7 +96,7 @@
     <ClInclude Include="GLFW\glfw3.h" />
     <ClInclude Include="indexbuffer.hpp" />
     <ClInclude Include="keystate.h" />
-    <ClInclude Include="playerinput.h" />
+    <ClInclude Include="input.h" />
     <ClInclude Include="position.hpp" />
     <ClInclude Include="program.h" />
     <ClInclude Include="shader.h" />

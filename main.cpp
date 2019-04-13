@@ -1,11 +1,8 @@
 #include "GLEW\\glew.h"
 
-#include "arraybuffer.hpp"
-#include "indexbuffer.hpp"
-#include "playerinput.h"
-#include "keystate.h"
 #include "render.h"
 #include "tetris.h"
+#include "input.h"
 #include "glfw.h"
 
 #include <exception>
@@ -51,7 +48,7 @@ int main()
 		Tetris::Grid grid;
         Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
 
-		PlayerInput previousInput;
+		InputHistory inputHistory;
 		int updatesSinceLastDrop = 0;
 		std::chrono::milliseconds accumulatedTime{ 0 };
 		std::chrono::milliseconds previousTime = currentTime();
@@ -64,77 +61,25 @@ int main()
 
 			while (accumulatedTime >= frameDuration)
 			{
-				const PlayerInput playerInput = getPlayerInput(window);
+                inputHistory.previous = inputHistory.current;
+                inputHistory.current = getPlayerInput(window);
 
-				// Update Tetrimino position, need to prevent holding keys down...
-				if ((playerInput.left == KeyState::Pressed &&
-					previousInput.left != KeyState::Pressed) ||
-					playerInput.left == KeyState::Held)
-				{
-					tetrimino.shift({ -1, 0 });
-					if (tetrimino.collides(grid))
-						tetrimino.shift({ 1, 0 });
-				}
+                const auto [shouldMergeWithGrid, newUpdatesSinceLastDrop] =
+                    tetrimino.update(inputHistory, grid, updatesSinceLastDrop);
 
-				if ((playerInput.right == KeyState::Pressed &&
-					previousInput.right != KeyState::Pressed) ||
-					playerInput.right == KeyState::Held)
-				{
-					tetrimino.shift({ 1, 0 });
-					if (tetrimino.collides(grid))
-						tetrimino.shift({ -1, 0 });
-				}
+                if (shouldMergeWithGrid)
+                {
+                    const Colour& tetriminoColour = tetrimino.colour();
+                    const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
+                    for (const Position<int>& block : tetriminoBlocks)
+                        grid[block.y][block.x] = tetriminoColour;
 
-				if ((playerInput.down == KeyState::Pressed &&
-					previousInput.down != KeyState::Pressed) ||
-					playerInput.down == KeyState::Held ||
-					updatesSinceLastDrop >= 120)	// ~2 seconds per drop for now...
-				{									// ...make var for this later
-					tetrimino.shift({ 0, 1 });
-					if (tetrimino.collides(grid))	// Then merge tetrimino to...
-					{								// ...grid and spawn another
-						tetrimino.shift({ 0, -1 });
-						const Colour& tetriminoColour = tetrimino.colour();
-						const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
-						for (const Position<int>& block : tetriminoBlocks)
-							grid[block.y][block.x] = tetriminoColour;
-
-						const Tetris::Tetrimino::Type nextType =
-							static_cast<Tetris::Tetrimino::Type>(generateRandomIndex(6));
-						tetrimino = Tetris::Tetrimino(nextType, Position<int>{ 4, 2 });
-					}
-
-					if (updatesSinceLastDrop >= 60)
-						updatesSinceLastDrop = 0;
-				}
-
-				if ((playerInput.rotateClockwise == KeyState::Pressed &&
-					previousInput.rotateClockwise != KeyState::Pressed) ||
-					playerInput.rotateClockwise == KeyState::Held)
-				{
-					tetrimino.rotateClockwise();
-
-					int xShift = 1;
-					while (tetrimino.collides(grid))
-					{
-						tetrimino.shift({ xShift, 0 });
-						xShift = -1 * xShift + ((xShift > 0) ? -1 : 1);
-					}
-				}
-
-				if ((playerInput.rotateAntiClockwise == KeyState::Pressed &&
-					previousInput.rotateAntiClockwise != KeyState::Pressed) ||
-					previousInput.rotateAntiClockwise == KeyState::Held)
-				{
-					tetrimino.rotateAntiClockwise();
-
-					int xShift = 1;
-					while (tetrimino.collides(grid))
-					{
-						tetrimino.shift({ xShift, 0 });
-						xShift = -1 * xShift + ((xShift > 0) ? -1 : 1);
-					}
-				}
+                    const Tetris::Tetrimino::Type nextType =
+                        static_cast<Tetris::Tetrimino::Type>(generateRandomIndex(6));
+                    tetrimino = Tetris::Tetrimino(nextType, Position<int>{ 4, 2 });
+                }
+                
+                updatesSinceLastDrop = newUpdatesSinceLastDrop;
 
 				const auto rowIsComplete = [](const std::array<std::optional<Colour>, Tetris::Columns>& row)
 				{
@@ -169,7 +114,6 @@ int main()
 				}
 
 				++updatesSinceLastDrop;
-				previousInput = playerInput;
 				accumulatedTime -= frameDuration;
 			}
 			

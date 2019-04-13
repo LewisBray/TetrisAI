@@ -137,30 +137,25 @@ namespace Tetris
         , colour_{ pieceColour(type) }
     {}
 
-    void Tetrimino::rotateClockwise() noexcept
+    void Tetrimino::rotate(const Rotation direction) noexcept
     {
+        if (direction != Rotation::Clockwise &&
+            direction != Rotation::AntiClockwise)
+            return;
+
         for (Position<int>& blockTopLeft : blocks_)
         {
             const Position<float> blockCentre =
                 blockTopLeft + Position<float>{ 0.5f, 0.5f };
-            const Position<float> rotatedBlockCentre = {
+
+            const Position<float> rotatedBlockCentre =
+                (direction == Rotation::Clockwise) ?
+            Position<float>{
                 -blockCentre.y + centre_.x + centre_.y,
-                blockCentre.x - centre_.x + centre_.y
-            };
-
-            blockTopLeft.x = static_cast<int>(std::floor(rotatedBlockCentre.x));
-            blockTopLeft.y = static_cast<int>(std::floor(rotatedBlockCentre.y));
-        }
-    }
-
-    void Tetrimino::rotateAntiClockwise() noexcept
-    {
-        for (Position<int>& blockTopLeft : blocks_)
-        {
-            const Position<float> blockCentre =
-                blockTopLeft + Position<float>{ 0.5f, 0.5f };
-            const Position<float> rotatedBlockCentre = {
-                blockCentre.y + centre_.x - centre_.y,
+                 blockCentre.x - centre_.x + centre_.y
+            } :
+            Position<float>{
+                 blockCentre.y + centre_.x - centre_.y,
                 -blockCentre.x + centre_.x + centre_.y
             };
 
@@ -193,4 +188,73 @@ namespace Tetris
 
 		return false;
 	}
+
+    std::pair<bool, int> Tetrimino::update(const InputHistory& inputHistory,
+        const Grid& grid, const int updatesSinceLastDrop) noexcept
+    {
+        if (shiftLeft(inputHistory))
+        {
+            shift({ -1, 0 });
+            if (collides(grid))
+                shift({ 1, 0 });
+        }
+
+        if (shiftRight(inputHistory))
+        {
+            shift({ 1, 0 });
+            if (collides(grid))
+                shift({ -1, 0 });
+        }
+
+        const bool dropTetrimino =
+            (shiftDown(inputHistory) || updatesSinceLastDrop >= 120);
+        if (dropTetrimino)
+        {
+            shift({ 0, 1 });
+            if (collides(grid))     // Then we need to merge tetrimino...
+            {						// ...to grid and spawn another
+                shift({ 0, -1 });
+                return std::make_pair(true, 0);
+            }
+        }
+
+        if (rotateClockwise(inputHistory))
+        {
+            rotate(Rotation::Clockwise);
+
+            if (collides(grid) && !resolveRotationCollision(grid))
+                rotate(Rotation::AntiClockwise);
+        }
+
+        if (rotateAntiClockwise(inputHistory))
+        {
+            rotate(Rotation::AntiClockwise);
+
+            if (collides(grid) && !resolveRotationCollision(grid))
+                rotate(Rotation::Clockwise);
+        }
+
+        if (dropTetrimino)
+            return std::make_pair(false, 0);
+        else
+            return std::make_pair(false, updatesSinceLastDrop);
+    }
+
+    bool Tetrimino::resolveRotationCollision(const Grid& grid) noexcept
+    {
+        const std::pair<Blocks, Position<float>> initialState{ blocks_, centre_ };
+
+        constexpr int MaxNumAttempts = 4;
+        for (int attempt = 1; attempt <= MaxNumAttempts; ++attempt)
+        {
+            const int xShift = ((attempt % 2 == 0) ? 1 : -1) * attempt;
+
+            shift({ xShift, 0 });
+            if (!collides(grid))
+                return true;
+        }
+
+        std::tie(blocks_, centre_) = initialState;
+        return false;
+    }
 }
