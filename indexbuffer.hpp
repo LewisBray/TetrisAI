@@ -23,14 +23,14 @@ public:
     IndexBuffer(const IndexBuffer& other) = delete;
     IndexBuffer& operator=(const IndexBuffer& other) = delete;
 
-    IndexBuffer(IndexBuffer&& other)
+    IndexBuffer(IndexBuffer&& other) noexcept
         : id_{ other.id_ }
         , data_{ std::move(other.data_) }
     {
         other.id_ = 0;
     }
 
-    IndexBuffer& operator=(IndexBuffer&& other)
+    IndexBuffer& operator=(IndexBuffer&& other) noexcept
     {
         if (this == &other)
             return *this;

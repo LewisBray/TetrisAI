@@ -23,14 +23,14 @@ public:
     ArrayBuffer(const ArrayBuffer& other) = delete;
     ArrayBuffer& operator=(const ArrayBuffer& other) = delete;
 
-    ArrayBuffer(ArrayBuffer&& other)
+    ArrayBuffer(ArrayBuffer&& other) noexcept
         : id_{ other.id_ }
         , data_{ std::move(other.data_) }
     {
         other.id_ = 0;
     }
 
-    ArrayBuffer& operator=(ArrayBuffer&& other)
+    ArrayBuffer& operator=(ArrayBuffer&& other) noexcept
     {
         if (this == &other)
             return *this;
