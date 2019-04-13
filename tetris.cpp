@@ -3,6 +3,7 @@
 #include "tetris.h"
 
 #include <exception>
+#include <utility>
 #include <sstream>
 #include <map>
 
@@ -178,9 +179,9 @@ namespace Tetris
 		{
 			if (block.x < 0)
 				return true;
-			else if (block.x >= Columns)
+			else if (block.x >= Grid::Columns)
 				return true;
-			else if (block.y >= Rows)
+			else if (block.y >= Grid::Rows)
 				return true;
 			else if (grid[block.y][block.x])
 				return true;
@@ -256,5 +257,49 @@ namespace Tetris
 
         std::tie(blocks_, centre_) = initialState;
         return false;
+    }
+
+    const std::array<Grid::Cell, Grid::Columns>&
+        Grid::operator[](const int row) const noexcept
+    {
+        return grid_[row];
+    }
+
+    void Grid::merge(const Tetrimino& tetrimino) noexcept
+    {
+        const Colour& tetriminoColour = tetrimino.colour();
+        const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
+        for (const Position<int>& block : tetriminoBlocks)
+            grid_[block.y][block.x] = tetriminoColour;
+    }
+
+    bool Grid::rowIsComplete(const std::array<Cell, Columns>& row) const
+    {
+        return std::all_of(row.begin(), row.end(),
+            [](const Cell & cell) { return cell.has_value(); });
+    }
+
+    void Grid::update() noexcept
+    {
+        int rowToFillIn = -1;
+        for (int row = Rows - 1; row >= -0; --row)
+        {
+            if (rowIsComplete(grid_[row]))
+            {
+                for (Cell& cell : grid_[row])
+                    cell = std::nullopt;
+                if (rowToFillIn == -1)
+                    rowToFillIn = row;
+                else
+                    rowToFillIn = std::max(row, rowToFillIn);
+            }
+
+            if (rowToFillIn != -1 && row < rowToFillIn)
+            {
+                for (int col = 0; col < Columns; ++col)
+                    std::swap(grid_[row][col], grid_[rowToFillIn][col]);
+                --rowToFillIn;
+            }
+        }
     }
 }

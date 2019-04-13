@@ -10,11 +10,9 @@
 
 namespace Tetris
 {
-    constexpr int Rows = 18;
-    constexpr int Columns = 10;
-
     using Blocks = std::array<Position<int>, 4>;
-    using Grid = std::array<std::array<std::optional<Colour>, Columns>, Rows>;
+
+    class Grid;
 
 	class Tetrimino
     {
@@ -40,5 +38,23 @@ namespace Tetris
         Blocks blocks_ = {};			// Does this set every value to 0?
 		Position<float> centre_ = {};	// Ditto...
         Colour colour_ = Black;
+    };
+
+    class Grid
+    {
+    public:
+        using Cell = std::optional<Colour>;
+
+        enum { Rows = 18, Columns = 10 };
+
+        const std::array<Cell, Columns>& operator[](int row) const noexcept;
+
+        void merge(const Tetrimino& tetrimino) noexcept;
+        void update() noexcept;
+
+    private:
+        bool rowIsComplete(const std::array<Cell, Columns>& row) const;
+
+        std::array<std::array<Cell, Columns>, Rows> grid_;
     };
 }

@@ -43,11 +43,10 @@ int main()
 
         std::cout << glGetString(GL_VERSION) << std::endl;
 
-        BlockDrawer drawBlock;
-
 		Tetris::Grid grid;
         Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
 
+        BlockDrawer drawBlock;
 		InputHistory inputHistory;
 		int updatesSinceLastDrop = 0;
 		std::chrono::milliseconds accumulatedTime{ 0 };
@@ -69,10 +68,7 @@ int main()
 
                 if (shouldMergeWithGrid)
                 {
-                    const Colour& tetriminoColour = tetrimino.colour();
-                    const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
-                    for (const Position<int>& block : tetriminoBlocks)
-                        grid[block.y][block.x] = tetriminoColour;
+                    grid.merge(tetrimino);
 
                     const Tetris::Tetrimino::Type nextType =
                         static_cast<Tetris::Tetrimino::Type>(generateRandomIndex(6));
@@ -81,37 +77,7 @@ int main()
                 
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
 
-				const auto rowIsComplete = [](const std::array<std::optional<Colour>, Tetris::Columns>& row)
-				{
-					for (const std::optional<Colour>& cell : row)
-						if (!cell.has_value())
-							return false;
-
-					return true;
-				};
-
-				// Check for completed lines in grid, remove
-				// them and push remaining lines down
-				int rowToFillIn = -1;
-				for (int row = Tetris::Rows - 1; row >= -0; --row)
-				{
-                    if (rowIsComplete(grid[row]))
-					{
-						for (std::optional<Colour>& cell : grid[row])
-							cell = std::nullopt;
-						if (rowToFillIn == -1)
-							rowToFillIn = row;
-						else
-							rowToFillIn = std::max(row, rowToFillIn);
-					}
-
-					if (rowToFillIn != -1 && row < rowToFillIn)
-					{
-						for (int col = 0; col < Tetris::Columns; ++col)
-							std::swap(grid[row][col], grid[rowToFillIn][col]);
-						--rowToFillIn;
-					}
-				}
+                grid.update();
 
 				++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
@@ -123,11 +89,11 @@ int main()
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
                 drawBlock(blockTopLeft, tetrimino.colour());
 
-			for (int col = 0; col < Tetris::Columns; ++col)
+			for (int col = 0; col < Tetris::Grid::Columns; ++col)
 			{
-				for (int row = 0; row < Tetris::Rows; ++row)
+				for (int row = 0; row < Tetris::Grid::Rows; ++row)
 				{
-					const std::optional<Colour>& cell = grid[row][col];
+					const Tetris::Grid::Cell& cell = grid[row][col];
 					if (!cell.has_value())
 						continue;
 					

@@ -33,13 +33,13 @@
     <ClCompile Include="texture2d.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="tetris.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="render.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="tetris.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -71,9 +71,6 @@
     <ClInclude Include="texture2d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="tetris.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="position.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -87,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tetris.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
