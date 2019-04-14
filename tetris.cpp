@@ -281,24 +281,28 @@ namespace Tetris
 
     void Grid::update() noexcept
     {
-        int rowToFillIn = -1;
+        std::optional<int> rowToFillIn;
         for (int row = Rows - 1; row >= -0; --row)
         {
             if (rowIsComplete(grid_[row]))
             {
                 for (Cell& cell : grid_[row])
                     cell = std::nullopt;
-                if (rowToFillIn == -1)
+
+                if (!rowToFillIn.has_value())
                     rowToFillIn = row;
                 else
-                    rowToFillIn = std::max(row, rowToFillIn);
+                    rowToFillIn = std::max(row, rowToFillIn.value());
+            
+                continue;
             }
 
-            if (rowToFillIn != -1 && row < rowToFillIn)
+            if (rowToFillIn.has_value() && row < rowToFillIn)
             {
                 for (int col = 0; col < Columns; ++col)
-                    std::swap(grid_[row][col], grid_[rowToFillIn][col]);
-                --rowToFillIn;
+                    std::swap(grid_[row][col], grid_[rowToFillIn.value()][col]);
+                
+                --rowToFillIn.value();
             }
         }
     }
