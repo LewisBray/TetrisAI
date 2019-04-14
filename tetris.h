@@ -10,13 +10,15 @@
 
 namespace Tetris
 {
-    using Blocks = std::array<Position<int>, 4>;
-
     class Grid;
 
 	class Tetrimino
     {
     public:
+        using Blocks = std::array<Position<int>, 4>;
+
+        static constexpr int TotalTypes = 7;
+        
         enum class Type { T, L, RL, S, Z, Square, Long };
         enum class Rotation { Clockwise, AntiClockwise };
 
@@ -40,12 +42,15 @@ namespace Tetris
         Colour colour_ = Black;
     };
 
+    Tetrimino randomTetrimino(const Position<int>& position);
+
     class Grid
     {
     public:
         using Cell = std::optional<Colour>;
 
-        enum { Rows = 18, Columns = 10 };
+        static constexpr int Rows = 18;
+        static constexpr int Columns = 10;
 
         const std::array<Cell, Columns>& operator[](int row) const noexcept;
 

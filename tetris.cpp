@@ -1,10 +1,12 @@
 #include "GLEW\\glew.h"
 
+#include "currenttime.h"
 #include "tetris.h"
 
 #include <exception>
 #include <utility>
 #include <sstream>
+#include <random>
 #include <map>
 
 namespace Tetris
@@ -64,7 +66,7 @@ namespace Tetris
         }
     }
 
-    static constexpr Blocks blockLocations(
+    static constexpr Tetrimino::Blocks blockLocations(
         const Tetrimino::Type type, const Position<int>& topLeft)
     {
         switch (type)
@@ -259,6 +261,21 @@ namespace Tetris
         return false;
     }
 
+    Tetrimino randomTetrimino(const Position<int>& position)
+    {
+        const std::chrono::milliseconds time = currentTime();
+        const std::uint32_t rngSeed = static_cast<std::uint32_t>(time.count());
+        
+        std::minstd_rand rng(rngSeed);
+        const std::uniform_int_distribution<int>
+            uniformDist(0, Tetrimino::TotalTypes - 1);
+
+        const Tetrimino::Type randomType =
+            static_cast<Tetrimino::Type>(uniformDist(rng));
+
+        return Tetrimino(randomType, position);
+    }
+
     const std::array<Grid::Cell, Grid::Columns>&
         Grid::operator[](const int row) const noexcept
     {
@@ -268,7 +285,7 @@ namespace Tetris
     void Grid::merge(const Tetrimino& tetrimino) noexcept
     {
         const Colour& tetriminoColour = tetrimino.colour();
-        const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
+        const Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
         for (const Position<int>& block : tetriminoBlocks)
             grid_[block.y][block.x] = tetriminoColour;
     }

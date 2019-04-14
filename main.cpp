@@ -1,5 +1,6 @@
 #include "GLEW\\glew.h"
 
+#include "currenttime.h"
 #include "render.h"
 #include "tetris.h"
 #include "input.h"
@@ -8,26 +9,7 @@
 #include <exception>
 #include <iostream>
 #include <utility>
-#include <random>
 #include <chrono>
-
-static std::chrono::milliseconds currentTime()
-{
-	using namespace std::chrono;
-
-	const auto clockTime = steady_clock().now();
-	return duration_cast<milliseconds>(clockTime.time_since_epoch());
-}
-
-static int generateRandomIndex(const int lastIndex)
-{
-	const std::chrono::milliseconds time = currentTime();
-	const std::uint32_t rngSeed = static_cast<std::uint32_t>(time.count());
-	std::minstd_rand rng(rngSeed);
-	const std::uniform_int_distribution<int> uniformDist(0, lastIndex);
-
-	return uniformDist(rng);
-}
 
 int main()
 {
@@ -69,10 +51,7 @@ int main()
                 if (shouldMergeWithGrid)
                 {
                     grid.merge(tetrimino);
-
-                    const Tetris::Tetrimino::Type nextType =
-                        static_cast<Tetris::Tetrimino::Type>(generateRandomIndex(6));
-                    tetrimino = Tetris::Tetrimino(nextType, Position<int>{ 4, 2 });
+                    tetrimino = Tetris::randomTetrimino(Position<int>{ 4, 2 });
                 }
                 
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
@@ -85,7 +64,7 @@ int main()
 			
 			glClear(GL_COLOR_BUFFER_BIT);
 
-            const Tetris::Blocks& tetriminoBlocks = tetrimino.blocks();
+            const Tetris::Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
                 drawBlock(blockTopLeft, tetrimino.colour());
 
