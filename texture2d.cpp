@@ -8,9 +8,8 @@
 #include <exception>
 #include <utility>
 
-Texture2d::Texture2d(const int number,
-    const std::string& filepath, const ImageType imageType)
-    : number_{ number }
+Texture2d::Texture2d(const std::string& filepath, const ImageType imageType)
+    : number_{ totalTextureCount++ }
     , filepath_{ filepath }
 {
     if (imageType != ImageType::JPG && imageType != ImageType::PNG)
@@ -75,6 +74,7 @@ Texture2d& Texture2d::operator=(Texture2d&& other) noexcept
 
 Texture2d::~Texture2d() noexcept
 {
+    --totalTextureCount;
     glDeleteTextures(1, &id_);
     if (data_ != nullptr)
         stbi_image_free(data_);

@@ -7,7 +7,7 @@ class Texture2d
 public:
     enum class ImageType { JPG, PNG };
 
-    Texture2d(int number, const std::string& filepath, ImageType imageType);
+    Texture2d(const std::string& filepath, ImageType imageType);
 
     Texture2d(const Texture2d& other) = delete;
     Texture2d& operator=(const Texture2d& other) = delete;
@@ -35,4 +35,6 @@ private:
     int numChans_ = 0;
     unsigned char* data_ = nullptr;
     std::string filepath_;
+
+    inline static int totalTextureCount = 0;
 };
