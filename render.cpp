@@ -9,16 +9,6 @@
 #include "render.h"
 
 BlockDrawer::BlockDrawer()
-    : vertices_({
-        // vertex       // texture
-        0.0f, 0.0f,     0.0f, 0.0f,
-        0.0f, 0.0f,     1.0f, 0.0f,
-        0.0f, 0.0f,     1.0f, 1.0f,
-        0.0f, 0.0f,     0.0f, 1.0f
-    })
-    , program_()
-    , texture_(0, "block.jpg", Texture2d::ImageType::JPG)
-    , indices_({ 0, 1, 2, 2, 3, 0 })
 {
     vertices_.setVertexAttribute(0, 2, GL_FLOAT,
         4 * sizeof(float), reinterpret_cast<void*>(0));

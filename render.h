@@ -24,9 +24,15 @@ public:
     void operator()(const Position<int>& blockTopLeft, const Colour& colour);
 
 private:
-    ArrayBuffer<float, 16> vertices_;
-    
+    ArrayBuffer<float, 16> vertices_{ {
+            // vertex       // texture
+            0.0f, 0.0f,     0.0f, 0.0f,
+            0.0f, 0.0f,     1.0f, 0.0f,
+            0.0f, 0.0f,     1.0f, 1.0f,
+            0.0f, 0.0f,     0.0f, 1.0f
+        } };
+
     const Program program_;
-    const Texture2d texture_;
-    const IndexBuffer<unsigned, 6> indices_;
+    const Texture2d texture_{ "block.jpg", Texture2d::ImageType::JPG };
+    const IndexBuffer<unsigned, 6> indices_{ { 0, 1, 2, 2, 3, 0 } };
 };
