@@ -42,8 +42,7 @@ int main()
 
 			while (accumulatedTime >= frameDuration)
 			{
-                inputHistory.previous = inputHistory.current;
-                inputHistory.current = getPlayerInput(window);
+                inputHistory.update(getPlayerInput(window));
 
                 const auto [shouldMergeWithGrid, newUpdatesSinceLastDrop] =
                     tetrimino.update(inputHistory, grid, updatesSinceLastDrop);

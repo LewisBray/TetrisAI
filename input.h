@@ -16,8 +16,20 @@ PlayerInput getPlayerInput(const GLFW::Window& window) noexcept;
 
 struct InputHistory
 {
-    PlayerInput current;
-    PlayerInput previous;
+    struct KeyStateHistory
+    {
+        KeyState currentState = KeyState::Released;
+        KeyState previousState = KeyState::Released;
+        int numUpdatesInHeldState = 0;
+    };
+
+    KeyStateHistory down;
+    KeyStateHistory left;
+    KeyStateHistory right;
+    KeyStateHistory clockwise;
+    KeyStateHistory antiClockwise;
+
+    void update(const PlayerInput& playerInput) noexcept;
 };
 
 bool shiftDown(const InputHistory& inputHistory) noexcept;
