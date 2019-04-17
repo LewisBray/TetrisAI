@@ -26,7 +26,11 @@ int main()
         std::cout << glGetString(GL_VERSION) << std::endl;
 
 		Tetris::Grid grid;
-        Tetris::Tetrimino tetrimino(Tetris::Tetrimino::Type::T, Position<int>{ 4, 2 });
+
+        Tetris::Tetrimino tetrimino =
+            Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
+        Tetris::Tetrimino nextTetrimino =
+            Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
 
         BlockDrawer drawBlock;
 		InputHistory inputHistory;
@@ -50,7 +54,9 @@ int main()
                 if (shouldMergeWithGrid)
                 {
                     grid.merge(tetrimino);
-                    tetrimino = Tetris::randomTetrimino(Position<int>{ 4, 2 });
+                    tetrimino = nextTetrimino;
+                    nextTetrimino =
+                        Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
                 }
                 
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
@@ -60,12 +66,16 @@ int main()
 				++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
 			}
-			
-			glClear(GL_COLOR_BUFFER_BIT);
 
+            glClear(GL_COLOR_BUFFER_BIT);
+            
             const Tetris::Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
-                drawBlock(blockTopLeft, tetrimino.colour());
+            {
+                const Position<int> blockDrawPosition =
+                    { blockTopLeft.x - Tetris::Grid::DisplayShift, blockTopLeft.y };
+                drawBlock(blockDrawPosition, tetrimino.colour());
+            }
 
 			for (int row = 0; row < Tetris::Grid::Rows; ++row)
 			{
@@ -75,11 +85,30 @@ int main()
 					if (!cell.has_value())
 						continue;
 					
-                    const Position<int> blockTopLeft{ col, row };
-                    drawBlock(blockTopLeft, cell.value());
+                    const Position<int> cellDrawPosition =
+                        { col - Tetris::Grid::DisplayShift, row };
+                    drawBlock(cellDrawPosition, cell.value());
 				}
 			}
+
+            for (int y = 0; y < Tetris::Grid::Rows; ++y)
+            {
+                const Position<int> leftOfGridBlock =
+                    { 0 - Tetris::Grid::DisplayShift - 1, y };
+                const Position<int> rightOfGridBlock =
+                    { leftOfGridBlock.x + 1 + Tetris::Grid::Columns, y };
+                drawBlock(leftOfGridBlock, Grey);
+                drawBlock(rightOfGridBlock, Grey);
+            }
         
+            const Tetris::Tetrimino::Blocks& nextTetriminoBlocks = nextTetrimino.blocks();
+            for (const Position<int>& blockTopLeft : nextTetriminoBlocks)
+            {
+                const Position<int> blockDrawPosition = blockTopLeft +
+                    Position<int>{ Tetris::Grid::Columns - Tetris::Grid::DisplayShift, 12 };
+                drawBlock(blockDrawPosition, nextTetrimino.colour());
+            }
+
 			window.swapBuffers();
 			GLFW::pollEvents();
         }
