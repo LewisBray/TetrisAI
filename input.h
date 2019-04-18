@@ -31,9 +31,3 @@ struct InputHistory
 
     void update(const PlayerInput& playerInput) noexcept;
 };
-
-bool shiftDown(const InputHistory& inputHistory) noexcept;
-bool shiftLeft(const InputHistory& inputHistory) noexcept;
-bool shiftRight(const InputHistory& inputHistory) noexcept;
-bool rotateClockwise(const InputHistory& inputHistory) noexcept;
-bool rotateAntiClockwise(const InputHistory& inputHistory) noexcept;

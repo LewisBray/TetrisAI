@@ -7,7 +7,6 @@
 #include <utility>
 #include <sstream>
 #include <random>
-#include <map>
 
 namespace Tetris
 {
@@ -42,22 +41,22 @@ namespace Tetris
             return topLeft + Position<float>{ 1.5f, 1.5f };
 
         case Tetrimino::Type::L:
-            return topLeft + Position<float>{ 0.0f, 2.0f };
+            return topLeft + Position<float>{ 0.5f, 1.5f };
 
         case Tetrimino::Type::RL:
-            return topLeft + Position<float>{ 1.0f, 1.0f };
+            return topLeft + Position<float>{ 1.5f, 1.5f };
 
         case Tetrimino::Type::S:
-            return topLeft + Position<float>{ 1.0f, 0.0f };
+            return topLeft + Position<float>{ 1.5f, 1.5f };
 
         case Tetrimino::Type::Z:
-            return topLeft + Position<float>{ 1.0f, 0.0f };
+            return topLeft + Position<float>{ 1.5f, 1.5f };
 
         case Tetrimino::Type::Square:
             return topLeft + Position<float>{ 1.0f, 1.0f };
 
         case Tetrimino::Type::Long:
-            return topLeft + Position<float>{ 0.0f, 1.0f };
+            return topLeft + Position<float>{ 0.0f, 2.0f };
 
         default:
             throw std::exception {
@@ -175,17 +174,61 @@ namespace Tetris
 		centre_ += shift;
 	}
 
+    static bool shouldMove(
+        const Tetrimino::Direction direction, const InputHistory& inputHistory)
+    {
+        static constexpr int delay = 3;
+
+        switch (direction)
+        {
+        case Tetrimino::Direction::Down:
+            return ((inputHistory.down.currentState == KeyState::Pressed &&
+                inputHistory.down.previousState != KeyState::Pressed) ||
+                (inputHistory.down.currentState == KeyState::Held &&
+                inputHistory.down.numUpdatesInHeldState % delay == 0));
+
+        case Tetrimino::Direction::Left:
+            return ((inputHistory.left.currentState == KeyState::Pressed &&
+                inputHistory.left.previousState != KeyState::Pressed) ||
+                (inputHistory.left.currentState == KeyState::Held &&
+                inputHistory.left.numUpdatesInHeldState % delay == 0));
+
+        case Tetrimino::Direction::Right:
+            return ((inputHistory.right.currentState == KeyState::Pressed &&
+                inputHistory.right.previousState != KeyState::Pressed) ||
+                (inputHistory.right.currentState == KeyState::Held &&
+                inputHistory.right.numUpdatesInHeldState % delay == 0));
+
+        case Tetrimino::Direction::Clockwise:
+            return ((inputHistory.clockwise.currentState == KeyState::Pressed &&
+                inputHistory.clockwise.previousState != KeyState::Pressed) ||
+                (inputHistory.clockwise.currentState == KeyState::Held &&
+                inputHistory.clockwise.numUpdatesInHeldState % delay == 0));
+        
+        case Tetrimino::Direction::AntiClockwise:
+            return ((inputHistory.antiClockwise.currentState == KeyState::Pressed &&
+                inputHistory.antiClockwise.previousState != KeyState::Pressed) ||
+                (inputHistory.antiClockwise.currentState == KeyState::Held &&
+                inputHistory.antiClockwise.numUpdatesInHeldState % delay == 0));
+
+        default:
+            throw std::exception{
+                "Unhandled player input in function 'shouldMove'"
+            };
+        }
+    }
+
     std::pair<bool, int> Tetrimino::update(const InputHistory& inputHistory,
         const Grid& grid, const int updatesSinceLastDrop) noexcept
     {
-        if (shiftLeft(inputHistory))
+        if (shouldMove(Direction::Left, inputHistory))
         {
             shift({ -1, 0 });
             if (collision(*this, grid))
                 shift({ 1, 0 });
         }
 
-        if (shiftRight(inputHistory))
+        if (shouldMove(Direction::Right, inputHistory))
         {
             shift({ 1, 0 });
             if (collision(*this, grid))
@@ -193,7 +236,8 @@ namespace Tetris
         }
 
         const bool dropTetrimino =
-            (shiftDown(inputHistory) || updatesSinceLastDrop >= 120);
+            (shouldMove(Direction::Down, inputHistory) ||
+            updatesSinceLastDrop >= 120);
         if (dropTetrimino)
         {
             shift({ 0, 1 });
@@ -204,7 +248,7 @@ namespace Tetris
             }
         }
 
-        if (rotateClockwise(inputHistory))
+        if (shouldMove(Direction::Clockwise, inputHistory))
         {
             rotate(Direction::Clockwise);
 
@@ -212,7 +256,7 @@ namespace Tetris
                 rotate(Direction::AntiClockwise);
         }
 
-        if (rotateAntiClockwise(inputHistory))
+        if (shouldMove(Direction::AntiClockwise, inputHistory))
         {
             rotate(Direction::AntiClockwise);
 
