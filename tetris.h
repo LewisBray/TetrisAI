@@ -31,7 +31,7 @@ namespace Tetris
         void shift(const Position<int>& direction) noexcept;
         
         std::pair<bool, int> update(const InputHistory& inputHistory,
-            const Grid& grid, int updatesSinceLastDrop) noexcept;
+            const Grid& grid, int updatesSinceLastDrop);
 
     private:
         bool resolveRotationCollision(const Grid& grid) noexcept;
@@ -62,5 +62,5 @@ namespace Tetris
         std::array<std::array<Cell, Columns>, Rows> grid_;
     };
 
-    bool collision(const Tetrimino& tetrimino, const Grid& grid) noexcept;
+    bool collision(const Tetrimino& tetrimino, const Grid& grid);
 }

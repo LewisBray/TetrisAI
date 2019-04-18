@@ -219,7 +219,7 @@ namespace Tetris
     }
 
     std::pair<bool, int> Tetrimino::update(const InputHistory& inputHistory,
-        const Grid& grid, const int updatesSinceLastDrop) noexcept
+        const Grid& grid, const int updatesSinceLastDrop)
     {
         if (shouldMove(Direction::Left, inputHistory))
         {
@@ -349,9 +349,9 @@ namespace Tetris
         }
     }
 
-    bool collision(const Tetrimino& tetrimino, const Grid& grid) noexcept
+    bool collision(const Tetrimino& tetrimino, const Grid& grid)
     {
-        const auto overlapsGrid = [&grid](const Position<int>& block)
+        const auto overlapsGrid = [&grid](const Position<int>& block) noexcept
         {
             return (block.x < 0 || block.x >= Grid::Columns ||
                 block.y >= Grid::Rows || grid[block.y][block.x].has_value());
