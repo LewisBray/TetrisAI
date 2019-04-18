@@ -20,16 +20,15 @@ namespace Tetris
         static constexpr int TotalTypes = 7;
         
         enum class Type { T, L, RL, S, Z, Square, Long };
-        enum class Rotation { Clockwise, AntiClockwise };
+        enum class Direction { Down, Left, Right, Clockwise, AntiClockwise };
 
         Tetrimino(Type type, const Position<int>& topLeft);
 
         constexpr const Colour& colour() const noexcept { return colour_; }
         constexpr const Blocks& blocks() const noexcept { return blocks_; }
 
-        void rotate(Rotation direction) noexcept;
+        void rotate(Direction direction) noexcept;
         void shift(const Position<int>& direction) noexcept;
-		bool collides(const Grid& grid) const noexcept;
         
         std::pair<bool, int> update(const InputHistory& inputHistory,
             const Grid& grid, int updatesSinceLastDrop) noexcept;
@@ -62,4 +61,6 @@ namespace Tetris
 
         std::array<std::array<Cell, Columns>, Rows> grid_;
     };
+
+    bool collision(const Tetrimino& tetrimino, const Grid& grid) noexcept;
 }

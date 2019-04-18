@@ -140,10 +140,10 @@ namespace Tetris
         , colour_{ pieceColour(type) }
     {}
 
-    void Tetrimino::rotate(const Rotation direction) noexcept
+    void Tetrimino::rotate(const Direction direction) noexcept
     {
-        if (direction != Rotation::Clockwise &&
-            direction != Rotation::AntiClockwise)
+        if (direction != Direction::Clockwise &&
+            direction != Direction::AntiClockwise)
             return;
 
         for (Position<int>& blockTopLeft : blocks_)
@@ -152,7 +152,7 @@ namespace Tetris
                 blockTopLeft + Position<float>{ 0.5f, 0.5f };
 
             const Position<float> rotatedBlockCentre =
-                (direction == Rotation::Clockwise) ?
+                (direction == Direction::Clockwise) ?
             Position<float>{
                 -blockCentre.y + centre_.x + centre_.y,
                  blockCentre.x - centre_.x + centre_.y
@@ -175,37 +175,20 @@ namespace Tetris
 		centre_ += shift;
 	}
 
-	bool Tetrimino::collides(const Grid& grid) const noexcept
-	{
-		for (const Position<int>& block : blocks_)
-		{
-			if (block.x < 0)
-				return true;
-			else if (block.x >= Grid::Columns)
-				return true;
-			else if (block.y >= Grid::Rows)
-				return true;
-			else if (grid[block.y][block.x])
-				return true;
-		}
-
-		return false;
-	}
-
     std::pair<bool, int> Tetrimino::update(const InputHistory& inputHistory,
         const Grid& grid, const int updatesSinceLastDrop) noexcept
     {
         if (shiftLeft(inputHistory))
         {
             shift({ -1, 0 });
-            if (collides(grid))
+            if (collision(*this, grid))
                 shift({ 1, 0 });
         }
 
         if (shiftRight(inputHistory))
         {
             shift({ 1, 0 });
-            if (collides(grid))
+            if (collision(*this, grid))
                 shift({ -1, 0 });
         }
 
@@ -214,8 +197,8 @@ namespace Tetris
         if (dropTetrimino)
         {
             shift({ 0, 1 });
-            if (collides(grid))     // Then we need to merge tetrimino...
-            {						// ...to grid and spawn another
+            if (collision(*this, grid)) // Then we need to merge tetrimino...
+            {						    // ...to grid and spawn another
                 shift({ 0, -1 });
                 return std::make_pair(true, 0);
             }
@@ -223,18 +206,18 @@ namespace Tetris
 
         if (rotateClockwise(inputHistory))
         {
-            rotate(Rotation::Clockwise);
+            rotate(Direction::Clockwise);
 
-            if (collides(grid) && !resolveRotationCollision(grid))
-                rotate(Rotation::AntiClockwise);
+            if (collision(*this, grid) && !resolveRotationCollision(grid))
+                rotate(Direction::AntiClockwise);
         }
 
         if (rotateAntiClockwise(inputHistory))
         {
-            rotate(Rotation::AntiClockwise);
+            rotate(Direction::AntiClockwise);
 
-            if (collides(grid) && !resolveRotationCollision(grid))
-                rotate(Rotation::Clockwise);
+            if (collision(*this, grid) && !resolveRotationCollision(grid))
+                rotate(Direction::Clockwise);
         }
 
         if (dropTetrimino)
@@ -247,13 +230,13 @@ namespace Tetris
     {
         const std::pair<Blocks, Position<float>> initialState{ blocks_, centre_ };
 
-        constexpr int MaxNumAttempts = 4;
+        static constexpr int MaxNumAttempts = 4;
         for (int attempt = 1; attempt <= MaxNumAttempts; ++attempt)
         {
             const int xShift = ((attempt % 2 == 0) ? 1 : -1) * attempt;
 
             shift({ xShift, 0 });
-            if (!collides(grid))
+            if (!collision(*this, grid))
                 return true;
         }
 
@@ -306,21 +289,31 @@ namespace Tetris
                 for (Cell& cell : grid_[row])
                     cell = std::nullopt;
 
-                if (!rowToFillIn.has_value())
-                    rowToFillIn = row;
-                else
+                if (rowToFillIn.has_value())
                     rowToFillIn = std::max(row, rowToFillIn.value());
+                else
+                    rowToFillIn = row;
             
                 continue;
             }
 
             if (rowToFillIn.has_value() && row < rowToFillIn)
             {
-                for (int col = 0; col < Columns; ++col)
-                    std::swap(grid_[row][col], grid_[rowToFillIn.value()][col]);
-                
+                std::swap(grid_[row], grid_[rowToFillIn.value()]);
                 --rowToFillIn.value();
             }
         }
+    }
+
+    bool collision(const Tetrimino& tetrimino, const Grid& grid) noexcept
+    {
+        const auto overlapsGrid = [&grid](const Position<int>& block)
+        {
+            return (block.x < 0 || block.x >= Grid::Columns ||
+                block.y >= Grid::Rows || grid[block.y][block.x].has_value());
+        };
+
+        const Tetrimino::Blocks& blocks = tetrimino.blocks();
+        return std::any_of(blocks.begin(), blocks.end(), overlapsGrid);
     }
 }

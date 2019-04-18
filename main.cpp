@@ -67,9 +67,9 @@ int main()
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
                 drawBlock(blockTopLeft, tetrimino.colour());
 
-			for (int col = 0; col < Tetris::Grid::Columns; ++col)
+			for (int row = 0; row < Tetris::Grid::Rows; ++row)
 			{
-				for (int row = 0; row < Tetris::Grid::Rows; ++row)
+			    for (int col = 0; col < Tetris::Grid::Columns; ++col)
 				{
 					const Tetris::Grid::Cell& cell = grid[row][col];
 					if (!cell.has_value())
