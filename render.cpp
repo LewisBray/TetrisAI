@@ -15,8 +15,8 @@ BlockDrawer::BlockDrawer()
     vertices_.setVertexAttribute(1, 2, GL_FLOAT,
         4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 
-    const Shader vertexShader("vertex.shader", GL_VERTEX_SHADER);
-    const Shader fragmentShader("fragment.shader", GL_FRAGMENT_SHADER);
+    const Shader vertexShader(".\\Shaders\\vertex.shader", GL_VERTEX_SHADER);
+    const Shader fragmentShader(".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER);
 
     program_.attach(vertexShader);
     program_.attach(fragmentShader);

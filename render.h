@@ -33,6 +33,6 @@ private:
         } };
 
     const Program program_;
-    const Texture2d texture_{ "block.jpg", Texture2d::ImageType::JPG };
+    const Texture2d texture_{ ".\\Images\\block.jpg", Texture2d::ImageType::JPG };
     const IndexBuffer<unsigned, 6> indices_{ { 0, 1, 2, 2, 3, 0 } };
 };
