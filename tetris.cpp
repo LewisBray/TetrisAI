@@ -137,6 +137,7 @@ namespace Tetris
         : blocks_{ blockLocations(type, topLeft) }
         , centre_{ centreLocation(type, topLeft) }
         , colour_{ pieceColour(type) }
+        , type_{ type }
     {}
 
     void Tetrimino::rotate(const Direction direction) noexcept
@@ -303,18 +304,17 @@ namespace Tetris
         return Tetrimino(randomType, position);
     }
 
+    Tetrimino::Blocks nextTetriminoBlockDisplayLocations(const Tetrimino::Type type)
+    {
+        static constexpr Position<int> DisplayLocationTopLeft = { 5, 12 };
+        
+        return blockLocations(type, DisplayLocationTopLeft);
+    }
+
     const std::array<Grid::Cell, Grid::Columns>&
         Grid::operator[](const int row) const noexcept
     {
         return grid_[row];
-    }
-
-    void Grid::merge(const Tetrimino& tetrimino) noexcept
-    {
-        const Colour& tetriminoColour = tetrimino.colour();
-        const Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
-        for (const Position<int>& block : tetriminoBlocks)
-            grid_[block.y][block.x] = tetriminoColour;
     }
 
     bool Grid::rowIsComplete(const std::array<Cell, Columns>& row) const
@@ -323,8 +323,9 @@ namespace Tetris
             [](const Cell & cell) { return cell.has_value(); });
     }
 
-    void Grid::update() noexcept
+    int Grid::update() noexcept
     {
+        int rowsCleared = 0;
         std::optional<int> rowToFillIn;
         for (int row = Rows - 1; row >= -0; --row)
         {
@@ -338,6 +339,7 @@ namespace Tetris
                 else
                     rowToFillIn = row;
             
+                ++rowsCleared;
                 continue;
             }
 
@@ -347,6 +349,16 @@ namespace Tetris
                 --rowToFillIn.value();
             }
         }
+
+        return rowsCleared;
+    }
+
+    void Grid::merge(const Tetrimino& tetrimino) noexcept
+    {
+        const Colour& tetriminoColour = tetrimino.colour();
+        const Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
+        for (const Position<int>& block : tetriminoBlocks)
+            grid_[block.y][block.x] = tetriminoColour;
     }
 
     bool collision(const Tetrimino& tetrimino, const Grid& grid)

@@ -25,6 +25,7 @@ namespace Tetris
 
         Tetrimino(Type type, const Position<int>& topLeft);
 
+        constexpr Type type() const noexcept { return type_; }
         constexpr const Colour& colour() const noexcept { return colour_; }
         constexpr const Blocks& blocks() const noexcept { return blocks_; }
 
@@ -40,9 +41,11 @@ namespace Tetris
         Blocks blocks_ = {};			// Does this set every value to 0?
 		Position<float> centre_ = {};	// Ditto...
         Colour colour_ = Black;
+        Type type_ = Type::T;
     };
 
     Tetrimino randomTetrimino(const Position<int>& position);
+    Tetrimino::Blocks nextTetriminoBlockDisplayLocations(Tetrimino::Type type);
 
     class Grid
     {
@@ -55,8 +58,8 @@ namespace Tetris
 
         const std::array<Cell, Columns>& operator[](int row) const noexcept;
 
+        int update() noexcept;
         void merge(const Tetrimino& tetrimino) noexcept;
-        void update() noexcept;
 
     private:
         bool rowIsComplete(const std::array<Cell, Columns>& row) const;

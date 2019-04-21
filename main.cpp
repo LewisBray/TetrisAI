@@ -34,6 +34,7 @@ int main()
 
         BlockDrawer drawBlock;
 		InputHistory inputHistory;
+        int playerScore = 0;
 		int updatesSinceLastDrop = 0;
 		std::chrono::milliseconds accumulatedTime{ 0 };
 		std::chrono::milliseconds previousTime = currentTime();
@@ -61,14 +62,17 @@ int main()
                 
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
 
-                grid.update();
+                const int rowsCleared = grid.update();
+                playerScore += rowsCleared * 100;
+
+                std::cout << playerScore << std::endl;
 
 				++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
 			}
 
             glClear(GL_COLOR_BUFFER_BIT);
-            
+           
             const Tetris::Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
             {
@@ -101,13 +105,10 @@ int main()
                 drawBlock(rightOfGridBlock, Grey);
             }
         
-            const Tetris::Tetrimino::Blocks& nextTetriminoBlocks = nextTetrimino.blocks();
-            for (const Position<int>& blockTopLeft : nextTetriminoBlocks)
-            {
-                const Position<int> blockDrawPosition = blockTopLeft +
-                    Position<int>{ Tetris::Grid::Columns - Tetris::Grid::DisplayShift, 12 };
-                drawBlock(blockDrawPosition, nextTetrimino.colour());
-            }
+            const Tetris::Tetrimino::Blocks nextTetriminoDisplayBlocks =
+                Tetris::nextTetriminoBlockDisplayLocations(nextTetrimino.type());
+            for (const Position<int>& blockTopLeft : nextTetriminoDisplayBlocks)
+                drawBlock(blockTopLeft, nextTetrimino.colour());
 
 			window.swapBuffers();
 			GLFW::pollEvents();
