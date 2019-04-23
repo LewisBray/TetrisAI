@@ -54,7 +54,6 @@ namespace Tetris
 
         static constexpr int Rows = 18;
         static constexpr int Columns = 10;
-        static constexpr int DisplayShift = 9;
 
         const std::array<Cell, Columns>& operator[](int row) const noexcept;
 

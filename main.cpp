@@ -76,8 +76,7 @@ int main()
             const Tetris::Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
             for (const Position<int>& blockTopLeft : tetriminoBlocks)
             {
-                const Position<int> blockDrawPosition =
-                    { blockTopLeft.x - Tetris::Grid::DisplayShift, blockTopLeft.y };
+                const Position<int> blockDrawPosition = { blockTopLeft.x + 1, blockTopLeft.y };
                 drawBlock(blockDrawPosition, tetrimino.colour());
             }
 
@@ -89,18 +88,15 @@ int main()
 					if (!cell.has_value())
 						continue;
 					
-                    const Position<int> cellDrawPosition =
-                        { col - Tetris::Grid::DisplayShift, row };
+                    const Position<int> cellDrawPosition = { col + 1, row };
                     drawBlock(cellDrawPosition, cell.value());
 				}
 			}
 
             for (int y = 0; y < Tetris::Grid::Rows; ++y)
             {
-                const Position<int> leftOfGridBlock =
-                    { 0 - Tetris::Grid::DisplayShift - 1, y };
-                const Position<int> rightOfGridBlock =
-                    { leftOfGridBlock.x + 1 + Tetris::Grid::Columns, y };
+                const Position<int> leftOfGridBlock = { 0, y };
+                const Position<int> rightOfGridBlock = { 1 + Tetris::Grid::Columns, y };
                 drawBlock(leftOfGridBlock, Grey);
                 drawBlock(rightOfGridBlock, Grey);
             }

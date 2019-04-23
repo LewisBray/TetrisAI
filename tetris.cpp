@@ -306,7 +306,7 @@ namespace Tetris
 
     Tetrimino::Blocks nextTetriminoBlockDisplayLocations(const Tetrimino::Type type)
     {
-        static constexpr Position<int> DisplayLocationTopLeft = { 5, 12 };
+        static constexpr Position<int> DisplayLocationTopLeft = { 15, 12 };
         
         return blockLocations(type, DisplayLocationTopLeft);
     }
