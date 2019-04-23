@@ -30,7 +30,7 @@ namespace Tetris
         constexpr const Blocks& blocks() const noexcept { return blocks_; }
 
         void rotate(Direction direction) noexcept;
-        void shift(const Position<int>& direction) noexcept;
+        void shift(const Position<int>& shift) noexcept;
         
         std::pair<bool, int> update(const InputHistory& inputHistory,
             const Grid& grid, int updatesSinceLastDrop);
@@ -62,8 +62,6 @@ namespace Tetris
         void merge(const Tetrimino& tetrimino) noexcept;
 
     private:
-        bool rowIsComplete(const std::array<Cell, Columns>& row) const;
-
         std::array<std::array<Cell, Columns>, Rows> grid_;
     };
 

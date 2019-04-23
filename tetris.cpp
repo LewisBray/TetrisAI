@@ -317,38 +317,26 @@ namespace Tetris
         return grid_[row];
     }
 
-    bool Grid::rowIsComplete(const std::array<Cell, Columns>& row) const
-    {
-        return std::all_of(row.begin(), row.end(),
-            [](const Cell & cell) { return cell.has_value(); });
-    }
-
     int Grid::update() noexcept
     {
-        int rowsCleared = 0;
-        std::optional<int> rowToFillIn;
-        for (int row = Rows - 1; row >= -0; --row)
-        {
-            if (rowIsComplete(grid_[row]))
-            {
-                for (Cell& cell : grid_[row])
-                    cell = std::nullopt;
+        constexpr auto rowIsComplete =
+            [](const std::array<Cell, Columns> & row) noexcept {
+                return std::all_of(row.begin(), row.end(),
+                    [](const Cell & cell) { return cell.has_value(); });
+        };
 
-                if (rowToFillIn.has_value())
-                    rowToFillIn = std::max(row, rowToFillIn.value());
-                else
-                    rowToFillIn = row;
-            
-                ++rowsCleared;
-                continue;
-            }
+        const auto startOfRemovedRows =
+            std::remove_if(grid_.rbegin(), grid_.rend(), rowIsComplete);
 
-            if (rowToFillIn.has_value() && row < rowToFillIn)
-            {
-                std::swap(grid_[row], grid_[rowToFillIn.value()]);
-                --rowToFillIn.value();
-            }
-        }
+        constexpr auto clearRow = [](std::array <Cell, Columns>& row) noexcept {
+            for (Cell& cell : row)
+                cell.reset();
+        };
+
+        std::for_each(startOfRemovedRows, grid_.rend(), clearRow);
+
+        const int rowsCleared =
+            static_cast<int>(std::distance(startOfRemovedRows, grid_.rend()));
 
         return rowsCleared;
     }
@@ -363,8 +351,7 @@ namespace Tetris
 
     bool collision(const Tetrimino& tetrimino, const Grid& grid)
     {
-        const auto overlapsGrid = [&grid](const Position<int>& block) noexcept
-        {
+        const auto overlapsGrid = [&grid](const Position<int>& block) noexcept {
             return (block.x < 0 || block.x >= Grid::Columns ||
                 block.y >= Grid::Rows || grid[block.y][block.x].has_value());
         };
