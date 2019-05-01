@@ -33,7 +33,7 @@ namespace Tetris
         void shift(const Position<int>& shift) noexcept;
         
         std::pair<bool, int> update(const InputHistory& inputHistory,
-            const Grid& grid, int updatesSinceLastDrop);
+            const Grid& grid, int difficultyLevel, int updatesSinceLastDrop);
 
     private:
         bool resolveRotationCollision(const Grid& grid) noexcept;

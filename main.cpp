@@ -33,7 +33,7 @@ int main()
             Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
 
 		InputHistory inputHistory;
-        int playerScore = 0, updatesSinceLastDrop = 0;
+        int playerScore = 0, totalRowsCleared = 0, updatesSinceLastDrop = 0;
 		static constexpr std::chrono::milliseconds frameDuration{ 1000 / 60 };
 		std::chrono::milliseconds accumulatedTime{ 0 }, previousTime = currentTime();
         while (!window.shouldClose())
@@ -46,8 +46,11 @@ int main()
 			{
                 inputHistory.update(getPlayerInput(window));
 
+                const int difficultyLevel = totalRowsCleared / 10 + 1;
+
                 const auto [shouldMergeWithGrid, newUpdatesSinceLastDrop] =
-                    tetrimino.update(inputHistory, grid, updatesSinceLastDrop);
+                    tetrimino.update(inputHistory,
+                        grid, difficultyLevel, updatesSinceLastDrop);
 
                 if (shouldMergeWithGrid)
                 {
@@ -60,8 +63,11 @@ int main()
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
 
                 const int rowsCleared = grid.update();
-                playerScore += rowsCleared * 100;
-
+                totalRowsCleared += rowsCleared;
+                playerScore += rowsCleared * 100 * difficultyLevel;
+                
+                std::cout << totalRowsCleared << std::endl;
+                
 				++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
 			}

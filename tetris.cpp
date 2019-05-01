@@ -218,7 +218,7 @@ namespace Tetris
     }
 
     std::pair<bool, int> Tetrimino::update(const InputHistory& inputHistory,
-        const Grid& grid, const int updatesSinceLastDrop)
+        const Grid& grid, const int difficultyLevel, const int updatesSinceLastDrop)
     {
         if (shouldMove(Direction::Left, inputHistory))
         {
@@ -234,9 +234,15 @@ namespace Tetris
                 shift({ -1, 0 });
         }
 
+        // Fastest we can get is 6 drops per second
+        const int updatesAllowedBeforeDrop = std::invoke([&difficultyLevel](){
+            const int updatesAllowed = 120 - 5 * (difficultyLevel - 1);
+            return (updatesAllowed < 10) ? 10 : updatesAllowed;
+        });
+
         const bool dropTetrimino =
             (shouldMove(Direction::Down, inputHistory) ||
-            updatesSinceLastDrop >= 120);
+            updatesSinceLastDrop >= updatesAllowedBeforeDrop);
         if (dropTetrimino)
         {
             shift({ 0, 1 });
