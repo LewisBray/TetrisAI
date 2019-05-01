@@ -56,6 +56,14 @@ int main()
                 {
                     grid.merge(tetrimino);
                     tetrimino = nextTetrimino;
+                    if (Tetris::collision(tetrimino, grid))
+                    {
+                        playerScore = 0;
+                        totalRowsCleared = 0;
+                        updatesSinceLastDrop = 0;
+                        grid = Tetris::Grid{};
+                    }
+
                     nextTetrimino =
                         Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
                 }
