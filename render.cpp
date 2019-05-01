@@ -55,8 +55,8 @@ using namespace Tetris;
 
 // This will need some refactoring later but at least I can
 // remove the rendering logic from the game loop logic
-void renderScene(const Tetrimino& tetrimino,
-    const Tetrimino& nextTetrimino, const Grid& grid, const int score)
+void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
+    const Grid& grid, const int score, const int rowsCleared)
 {
     static ArrayBuffer<float, 16> vertices{ {
         // vertex       // texture
@@ -205,8 +205,16 @@ void renderScene(const Tetrimino& tetrimino,
     for (const Position<int>& blockTopLeft : nextTetriminoDisplayBlocks)
         renderTetriminoBlock(nextTetrimino.colour(), blockTopLeft);
 
-    renderText("SCORE", { 13, 2 });
-    renderText(formatScore(score), { 13, 3 });
+    renderText("SCORE", { 13, 1 });
+    renderText(formatScore(score), { 13, 2 });
+
+    const std::string level = std::to_string(rowsCleared / 10 + 1);
+    renderText("LEVEL", { 13, 4 });
+    renderText(level, { 17 - static_cast<int>(level.length()), 5 });
+
+    const std::string rows = std::to_string(rowsCleared);
+    renderText("ROWS", { 13, 7 });
+    renderText(rows, { 17 - static_cast<int>(rows.length()), 8 });
 
     renderText("NEXT", { 13, 10 });
 }

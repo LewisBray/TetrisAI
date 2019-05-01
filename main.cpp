@@ -80,7 +80,8 @@ int main()
 				accumulatedTime -= frameDuration;
 			}
             
-            renderScene(tetrimino, nextTetrimino, grid, playerScore);
+            renderScene(tetrimino, nextTetrimino,
+                grid, playerScore, totalRowsCleared);
 
 			window.swapBuffers();
 			GLFW::pollEvents();
