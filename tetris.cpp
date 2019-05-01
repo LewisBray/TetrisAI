@@ -1,5 +1,3 @@
-#include "GLEW\\glew.h"
-
 #include "currenttime.h"
 #include "tetris.h"
 
@@ -306,7 +304,7 @@ namespace Tetris
 
     Tetrimino::Blocks nextTetriminoBlockDisplayLocations(const Tetrimino::Type type)
     {
-        static constexpr Position<int> DisplayLocationTopLeft = { 15, 12 };
+        static constexpr Position<int> DisplayLocationTopLeft = { 15, 13 };
         
         return blockLocations(type, DisplayLocationTopLeft);
     }

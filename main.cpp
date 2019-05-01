@@ -32,13 +32,10 @@ int main()
         Tetris::Tetrimino nextTetrimino =
             Tetris::randomTetrimino(Tetris::Tetrimino::SpawnLocation);
 
-        BlockDrawer drawBlock;
 		InputHistory inputHistory;
-        int playerScore = 0;
-		int updatesSinceLastDrop = 0;
-		std::chrono::milliseconds accumulatedTime{ 0 };
-		std::chrono::milliseconds previousTime = currentTime();
+        int playerScore = 0, updatesSinceLastDrop = 0;
 		static constexpr std::chrono::milliseconds frameDuration{ 1000 / 60 };
+		std::chrono::milliseconds accumulatedTime{ 0 }, previousTime = currentTime();
         while (!window.shouldClose())
         {
 			const std::chrono::milliseconds time = currentTime();
@@ -65,46 +62,11 @@ int main()
                 const int rowsCleared = grid.update();
                 playerScore += rowsCleared * 100;
 
-                std::cout << playerScore << std::endl;
-
 				++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
 			}
-
-            glClear(GL_COLOR_BUFFER_BIT);
-           
-            const Tetris::Tetrimino::Blocks& tetriminoBlocks = tetrimino.blocks();
-            for (const Position<int>& blockTopLeft : tetriminoBlocks)
-            {
-                const Position<int> blockDrawPosition = { blockTopLeft.x + 1, blockTopLeft.y };
-                drawBlock(blockDrawPosition, tetrimino.colour());
-            }
-
-			for (int row = 0; row < Tetris::Grid::Rows; ++row)
-			{
-			    for (int col = 0; col < Tetris::Grid::Columns; ++col)
-				{
-					const Tetris::Grid::Cell& cell = grid[row][col];
-					if (!cell.has_value())
-						continue;
-					
-                    const Position<int> cellDrawPosition = { col + 1, row };
-                    drawBlock(cellDrawPosition, cell.value());
-				}
-			}
-
-            for (int y = 0; y < Tetris::Grid::Rows; ++y)
-            {
-                const Position<int> leftOfGridBlock = { 0, y };
-                const Position<int> rightOfGridBlock = { 1 + Tetris::Grid::Columns, y };
-                drawBlock(leftOfGridBlock, Grey);
-                drawBlock(rightOfGridBlock, Grey);
-            }
-        
-            const Tetris::Tetrimino::Blocks nextTetriminoDisplayBlocks =
-                Tetris::nextTetriminoBlockDisplayLocations(nextTetrimino.type());
-            for (const Position<int>& blockTopLeft : nextTetriminoDisplayBlocks)
-                drawBlock(blockTopLeft, nextTetrimino.colour());
+            
+            renderScene(tetrimino, nextTetrimino, grid, playerScore);
 
 			window.swapBuffers();
 			GLFW::pollEvents();
