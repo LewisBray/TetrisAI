@@ -295,8 +295,8 @@ namespace Tetris
 
     Tetrimino randomTetrimino(const Position<int>& position)
     {
-        const std::chrono::milliseconds time = currentTime();
-        const std::uint32_t rngSeed = static_cast<std::uint32_t>(time.count());
+        const auto time = currentTime();
+        const auto rngSeed = static_cast<std::uint32_t>(time.count());
         
         std::minstd_rand rng(rngSeed);
         const std::uniform_int_distribution<int>

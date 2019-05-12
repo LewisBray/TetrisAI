@@ -11,6 +11,8 @@
 #include <utility>
 #include <chrono>
 
+using namespace std::literals::chrono_literals;
+
 int main()
 {
     try
@@ -34,11 +36,11 @@ int main()
 
 		InputHistory inputHistory;
         int playerScore = 0, totalRowsCleared = 0, updatesSinceLastDrop = 0;
-		static constexpr std::chrono::milliseconds frameDuration{ 1000 / 60 };
-		std::chrono::milliseconds accumulatedTime{ 0 }, previousTime = currentTime();
+		static constexpr auto frameDuration = 16667us;      // ~60fps
+		auto accumulatedTime = 0us, previousTime = currentTime();
         while (!window.shouldClose())
         {
-			const std::chrono::milliseconds time = currentTime();
+			const auto time = currentTime();
 			accumulatedTime += time - previousTime;
 			previousTime = time;
 

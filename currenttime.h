@@ -2,4 +2,4 @@
 
 #include <chrono>
 
-std::chrono::milliseconds currentTime();
+std::chrono::microseconds currentTime();
