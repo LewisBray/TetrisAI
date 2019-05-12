@@ -7,6 +7,7 @@
 #include "glfw.h"
 
 #include <exception>
+#include <stdexcept>
 #include <iostream>
 #include <utility>
 #include <chrono>
@@ -23,7 +24,7 @@ int main()
         window.makeCurrentContext();
 
         if (glewInit() != GLEW_OK)
-            throw std::exception{ "Failed to initialise GLEW" };
+            throw std::runtime_error{ "Failed to initialise GLEW" };
 
         std::cout << glGetString(GL_VERSION) << std::endl;
 

@@ -23,7 +23,9 @@ static Position<float> textureCoordinates(char c)
     const bool isDigit = std::isdigit(c);
 
     if (!isLetter && !isDigit)
-        throw std::exception{ "Unexpected character attempting to be rendered" };
+        throw std::domain_error {
+            "Unexpected character attempting to be rendered"
+        };
 
     if (isLetter)
     {

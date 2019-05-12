@@ -1,7 +1,7 @@
 #include "currenttime.h"
 #include "tetris.h"
 
-#include <exception>
+#include <stdexcept>
 #include <utility>
 #include <sstream>
 #include <random>
@@ -24,7 +24,7 @@ namespace Tetris
         case Tetrimino::Type::Long:     return White;
 
         default:
-            throw std::exception {
+            throw std::domain_error {
 				"Invalid Tetrimino type in function 'pieceColour'"
 			};
         }
@@ -57,7 +57,7 @@ namespace Tetris
             return topLeft + Position<float>{ 0.0f, 2.0f };
 
         default:
-            throw std::exception {
+            throw std::domain_error {
 				"Invalid Tetrimino type used in function 'centreLocation'"
 			};
         }
@@ -125,7 +125,7 @@ namespace Tetris
             };
 
         default:
-            throw std::exception {
+            throw std::domain_error {
 				"Invalid Tetrimino type in used in function 'blockLocations'"
 			};
         }
@@ -211,7 +211,7 @@ namespace Tetris
                 inputHistory.antiClockwise.numUpdatesInHeldState % delay == 0));
 
         default:
-            throw std::exception{
+            throw std::domain_error {
                 "Unhandled player input in function 'shouldMove'"
             };
         }

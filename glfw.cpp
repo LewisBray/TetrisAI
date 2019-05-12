@@ -1,6 +1,6 @@
 #include "glfw.h"
 
-#include <exception>
+#include <stdexcept>
 #include <cctype>
 #include <map>
 
@@ -9,7 +9,7 @@ namespace GLFW
     GLFW::GLFW()
     {
         if (!glfwInit())
-            throw std::exception{ "Failed to initialise GLFW" };
+            throw std::runtime_error{ "Failed to initialise GLFW" };
 	}
 
     GLFW::~GLFW() noexcept
@@ -21,7 +21,7 @@ namespace GLFW
         : window_{ glfwCreateWindow(width, height, title, NULL, NULL) }
     {
         if (window_ == nullptr)
-            throw std::exception{ "Failed to create window" };
+            throw std::runtime_error{ "Failed to create window" };
 	
 		glfwSetKeyCallback(window_, keyStateCallback);
 	}

@@ -2,8 +2,8 @@
 
 #include "program.h"
 
+#include <stdexcept>
 #include <algorithm>
-#include <exception>
 #include <utility>
 #include <string>
 
@@ -70,7 +70,7 @@ int Program::uniformLocation(const char* const name) const
     {
         const std::string errorMessage =
             std::string("Could not find uniform: ") + name;
-        throw std::exception{ errorMessage.c_str() };
+        throw std::invalid_argument{ errorMessage.c_str() };
     }
 
     return uniformLocation;

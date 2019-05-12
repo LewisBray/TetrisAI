@@ -5,7 +5,7 @@
 
 #include "texture2d.h"
 
-#include <exception>
+#include <stdexcept>
 #include <utility>
 
 Texture2d::Texture2d(const char* const filepath, const ImageType imageType)
@@ -13,7 +13,7 @@ Texture2d::Texture2d(const char* const filepath, const ImageType imageType)
     , filepath_{ filepath }
 {
     if (imageType != ImageType::JPG && imageType != ImageType::PNG)
-        throw std::exception{ "Unhandled texture image type" };
+        throw std::domain_error{ "Unhandled texture image type" };
 
     if (imageType == ImageType::PNG)
         stbi_set_flip_vertically_on_load(true);
@@ -24,7 +24,7 @@ Texture2d::Texture2d(const char* const filepath, const ImageType imageType)
     if (data_ == nullptr)
     {
         const std::string errorMessage = "Failed to load image: " + filepath_;
-        throw std::exception{ errorMessage.c_str() };
+        throw std::runtime_error{ errorMessage.c_str() };
     }
 
     glGenTextures(1, &id_);
