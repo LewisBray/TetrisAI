@@ -2,12 +2,10 @@
 
 #include "GLEW\\glew.h"
 
-#include <string>
-
 class Shader
 {
 public:
-    Shader(const std::string& sourceFilepath, GLenum type);
+    Shader(const char* sourceFilepath, GLenum type);
 
     Shader(const Shader& other) = delete;
     Shader& operator=(const Shader& other) = delete;

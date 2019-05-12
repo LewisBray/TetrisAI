@@ -2,7 +2,6 @@
 
 #include "shader.h"
 
-#include <string>
 #include <array>
 
 class Program
@@ -24,11 +23,11 @@ public:
     void link() const noexcept;
     void validate() const noexcept;
     void attach(const Shader& shader) const noexcept;
-    void setTextureUniform(const std::string& name, int value) const;
-    void setUniform(const std::string& name, const std::array<float, 4>& values) const;
+    void setTextureUniform(const char* name, int value) const;
+    void setUniform(const char* name, const std::array<float, 4>& values) const;
 
 private:
-    int uniformLocation(const std::string& name) const;
+    int uniformLocation(const char* name) const;
 
     unsigned id_ = 0;
 };

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <exception>
 #include <utility>
+#include <string>
 
 Program::Program() noexcept
     : id_{ glCreateProgram() }
@@ -50,22 +51,25 @@ void Program::attach(const Shader& shader) const noexcept
     glAttachShader(id_, shader.id());
 }
 
-void Program::setTextureUniform(const std::string& name, const int value) const
+void Program::setTextureUniform(const char* const name, const int value) const
 {
     glUniform1i(uniformLocation(name), value);
 }
 
-void Program::setUniform(const std::string& name, const std::array<float, 4>& values) const
+void Program::setUniform(const char* const name,
+    const std::array<float, 4>& values) const
 {
-    glUniform4f(uniformLocation(name), values[0], values[1], values[2], values[3]);
+    glUniform4f(uniformLocation(name),
+        values[0], values[1], values[2], values[3]);
 }
 
-int Program::uniformLocation(const std::string& name) const
+int Program::uniformLocation(const char* const name) const
 {
-    const int uniformLocation = glGetUniformLocation(id_, name.c_str());
+    const int uniformLocation = glGetUniformLocation(id_, name);
     if (uniformLocation == -1)
     {
-        const std::string errorMessage = "Could not find uniform: " + name;
+        const std::string errorMessage =
+            std::string("Could not find uniform: ") + name;
         throw std::exception{ errorMessage.c_str() };
     }
 

@@ -8,7 +8,7 @@
 #include <exception>
 #include <utility>
 
-Texture2d::Texture2d(const std::string& filepath, const ImageType imageType)
+Texture2d::Texture2d(const char* const filepath, const ImageType imageType)
     : number_{ totalTextureCount++ }
     , filepath_{ filepath }
 {

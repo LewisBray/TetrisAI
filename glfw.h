@@ -4,8 +4,6 @@
 
 #include "keystate.h"
 
-#include <string>
-
 namespace GLFW
 {
     class GLFW
@@ -18,7 +16,7 @@ namespace GLFW
     class Window
     {
     public:
-        Window(int width, int height, const std::string& title);
+        Window(int width, int height, const char* title);
 
         Window(const Window& other) = delete;
         Window(Window&& other) = delete;

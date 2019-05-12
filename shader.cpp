@@ -5,8 +5,9 @@
 #include <utility>
 #include <sstream>
 #include <fstream>
+#include <string>
 
-Shader::Shader(const std::string& sourceFilepath, const GLenum type)
+Shader::Shader(const char* const sourceFilepath, const GLenum type)
     : id_{ glCreateShader(type) }
 {
     static const auto readFileContents = [](const std::string& filepath)

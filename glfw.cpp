@@ -1,6 +1,7 @@
 #include "glfw.h"
 
 #include <exception>
+#include <cctype>
 #include <map>
 
 namespace GLFW
@@ -16,8 +17,8 @@ namespace GLFW
         glfwTerminate();
     }
 
-    Window::Window(const int width, const int height, const std::string& title)
-        : window_{ glfwCreateWindow(width, height, title.c_str(), NULL, NULL) }
+    Window::Window(const int width, const int height, const char* const title)
+        : window_{ glfwCreateWindow(width, height, title, NULL, NULL) }
     {
         if (window_ == nullptr)
             throw std::exception{ "Failed to create window" };

@@ -73,10 +73,8 @@ int main()
                 const int rowsCleared = grid.update();
                 totalRowsCleared += rowsCleared;
                 playerScore += rowsCleared * 100 * difficultyLevel;
-                
-                std::cout << totalRowsCleared << std::endl;
-                
-				++updatesSinceLastDrop;
+
+                ++updatesSinceLastDrop;
 				accumulatedTime -= frameDuration;
 			}
             

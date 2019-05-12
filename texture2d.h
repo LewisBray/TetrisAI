@@ -7,7 +7,7 @@ class Texture2d
 public:
     enum class ImageType { JPG, PNG };
 
-    Texture2d(const std::string& filepath, ImageType imageType);
+    Texture2d(const char* filepath, ImageType imageType);
 
     Texture2d(const Texture2d& other) = delete;
     Texture2d& operator=(const Texture2d& other) = delete;
@@ -21,7 +21,7 @@ public:
     constexpr int height() const noexcept { return height_; }
     constexpr int number() const noexcept { return number_; }
     constexpr unsigned id() const noexcept { return id_; }
-    std::string filepath() const { return filepath_; }
+    const std::string& filepath() const { return filepath_; }
 
     void bind() const noexcept;
     void makeActive() const noexcept;
