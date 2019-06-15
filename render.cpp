@@ -19,8 +19,8 @@ static constexpr float oneThirteenth = 1.0f / 13.0f;
 // Will probably want to cache all these calculated values eventually
 static Position<float> textureCoordinates(char c)
 {
-    const bool isLetter = std::isalpha(c);
-    const bool isDigit = std::isdigit(c);
+    const bool isLetter = static_cast<bool>(std::isalpha(c));
+    const bool isDigit = static_cast<bool>(std::isdigit(c));
 
     if (!isLetter && !isDigit)
         throw std::domain_error {
@@ -124,7 +124,7 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
 
         blockTexture.makeActive();
 
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
 
     const auto renderCharacter = [&](const char c, const Position<int>& topLeft)
@@ -161,7 +161,7 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
 
         fontTexture.makeActive();
 
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
 
     const auto renderText = [&](const std::string_view& text, Position<int> topLeft)
