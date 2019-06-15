@@ -51,6 +51,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>GLEW_STATIC;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>GLEW;GLFW;STBImage;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -68,6 +69,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>GLEW_STATIC;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>GLEW;GLFW;STBImage;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -93,16 +95,13 @@
     <ClInclude Include="colour.h" />
     <ClInclude Include="currenttime.h" />
     <ClInclude Include="render.h" />
-    <ClInclude Include="GLEW\glew.h" />
     <ClInclude Include="glfw.h" />
-    <ClInclude Include="GLFW\glfw3.h" />
     <ClInclude Include="indexbuffer.hpp" />
     <ClInclude Include="keystate.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="position.hpp" />
     <ClInclude Include="program.h" />
     <ClInclude Include="shader.h" />
-    <ClInclude Include="STBImage\stb_image.h" />
     <ClInclude Include="tetris.h" />
     <ClInclude Include="texture2d.h" />
   </ItemGroup>
