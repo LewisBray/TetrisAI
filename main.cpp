@@ -73,7 +73,7 @@ int main()
                 
                 updatesSinceLastDrop = newUpdatesSinceLastDrop;
 
-                const int rowsCleared = grid.update();
+                const int rowsCleared = grid.removeCompletedRows();
                 totalRowsCleared += rowsCleared;
                 playerScore += rowsCleared * 100 * difficultyLevel;
 

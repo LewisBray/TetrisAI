@@ -57,7 +57,7 @@ namespace Tetris
 
         const std::array<Cell, Columns>& operator[](int row) const noexcept;
 
-        int update() noexcept;
+        int removeCompletedRows() noexcept;
         void merge(const Tetrimino& tetrimino) noexcept;
 
     private:

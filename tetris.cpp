@@ -321,7 +321,7 @@ namespace Tetris
         return grid_[row];
     }
 
-    int Grid::update() noexcept
+    int Grid::removeCompletedRows() noexcept
     {
         constexpr auto rowIsComplete =
             [](const std::array<Cell, Columns> & row) noexcept {
