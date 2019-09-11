@@ -24,15 +24,6 @@
     <ClCompile Include="glfw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="shader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="program.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="texture2d.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="render.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -48,21 +39,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="glfw.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="shader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="arraybuffer.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="indexbuffer.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="program.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="texture2d.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="position.hpp">

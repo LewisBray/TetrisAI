@@ -1,17 +1,41 @@
 #include "GLEW\\glew.h"
 
-#include "arraybuffer.hpp"
-#include "indexbuffer.hpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include "STBImage\\stb_image.h"
+
 #include "position.hpp"
-#include "texture2d.h"
-#include "program.h"
-#include "shader.h"
 #include "render.h"
 
+#include <functional>
+#include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <string>
 #include <cctype>
+
+// Manages lifetime of OpenGL resources (like programs, buffers, etc...) via RAII
+template <typename Function>
+class OpenGLID
+{
+public:
+    OpenGLID(const unsigned id, Function release)
+        : id_{ id }
+        , release_{ release }
+    {}
+
+    ~OpenGLID() { release_(id_); }
+
+    OpenGLID(const OpenGLID&) = delete;
+    OpenGLID(OpenGLID&&) = default;
+    OpenGLID& operator=(const OpenGLID&) = delete;
+    OpenGLID& operator=(OpenGLID&&) = default;
+
+    const unsigned& operator*() const noexcept { return id_; }
+
+private:
+    unsigned id_ = 0u;
+    Function release_{};
+};
 
 static constexpr float oneThird = 1.0f / 3.0f;
 static constexpr float oneThirteenth = 1.0f / 13.0f;
@@ -45,7 +69,7 @@ static Position<float> textureCoordinates(char c)
     }
 }
 
-std::string formatScore(const int score)
+static std::string formatScore(const int score)
 {
     std::stringstream formattedScore;
     formattedScore << std::setw(6) << std::setfill('0') << score;
@@ -60,69 +84,182 @@ using namespace Tetris;
 void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
     const Grid& grid, const int score, const int rowsCleared)
 {
-    static ArrayBuffer<float, 16> vertices{ {
+    constexpr auto createArrayBufferID = []() {
+        unsigned id = 0;
+        glGenBuffers(1, &id);
+        return id;
+    };
+
+    constexpr auto deleteArrayBuffer = [](unsigned& id) { glDeleteBuffers(1, &id); };
+    using ArrayBufferID = OpenGLID<decltype(deleteArrayBuffer)>;
+    struct QuadrilateralArrayBuffer
+    {
+        ArrayBufferID id;
+        std::array<float, 16> buffer;
+    };
+
+    static QuadrilateralArrayBuffer vertices{
+        ArrayBufferID(createArrayBufferID(), deleteArrayBuffer), 
         // vertex       // texture
         0.0f, 0.0f,     0.0f, 0.0f,
         0.0f, 0.0f,     1.0f, 0.0f,
         0.0f, 0.0f,     1.0f, 1.0f,
         0.0f, 0.0f,     0.0f, 1.0f
-    } };
+    };
 
-    vertices.setVertexAttribute(0, 2, GL_FLOAT,
+    glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
         4 * sizeof(float), reinterpret_cast<void*>(0));
-    vertices.setVertexAttribute(1, 2, GL_FLOAT,
+
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
         4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 
-    static const IndexBuffer<unsigned, 6> indices_{ { 0, 1, 2, 2, 3, 0 } };
+    struct QuadrilateralIndexBuffer
+    {
+        ArrayBufferID id;
+        std::array<unsigned, 6> buffer;
+    };
 
-    static const Shader vertexShader{
-        ".\\Shaders\\vertex.shader", GL_VERTEX_SHADER };
-    static const Shader fragmentShader{
-        ".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER };
+    static QuadrilateralIndexBuffer indices{
+        ArrayBufferID(createArrayBufferID(), deleteArrayBuffer),
+        0, 1, 2, 2, 3, 0
+    };
 
-    static const Program shaderProgram;
-    shaderProgram.attach(vertexShader);
-    shaderProgram.attach(fragmentShader);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indices.id);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+        indices.buffer.size() * sizeof(unsigned), indices.buffer.data(), GL_STATIC_DRAW);
 
-    shaderProgram.link();
-    shaderProgram.validate();
+    using ShaderID = OpenGLID<decltype(glDeleteShader)>;
+    const auto createShaderID = [](const char* const sourceFilepath, const GLenum type)
+    {
+        const unsigned id = glCreateShader(type);
 
-    static const Texture2d blockTexture{
-        ".\\Images\\block.jpg", Texture2d::ImageType::JPG };
-    static const Texture2d fontTexture{
-        ".\\Images\\font.png", Texture2d::ImageType::PNG };
+        const std::string sourceString = std::invoke([sourceFilepath]() {
+            std::ifstream inputFile{ sourceFilepath };
+
+            std::stringstream fileContents;
+            fileContents << inputFile.rdbuf();
+
+            return fileContents.str();
+        });
+
+        const char* const source = sourceString.c_str();
+        glShaderSource(id, 1, &source, 0);
+        glCompileShader(id);
+
+        return ShaderID(id, glDeleteShader);
+    };
+
+    static const ShaderID vertexShader = createShaderID(".\\Shaders\\vertex.shader", GL_VERTEX_SHADER);
+    static const ShaderID fragmentShader = createShaderID(".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER);
+
+    using ProgramID = OpenGLID<decltype(glDeleteProgram)>;
+    static const ProgramID shaderProgram(glCreateProgram(), glDeleteProgram);
+    glAttachShader(*shaderProgram, *vertexShader);
+    glAttachShader(*shaderProgram, *fragmentShader);
+
+    glValidateProgram(*shaderProgram);
+    glLinkProgram(*shaderProgram);
+
+    const auto deleteTexture = [](unsigned& id) { glDeleteTextures(1, &id); };
+    using TextureID = OpenGLID<decltype(deleteTexture)>;
+    struct Texture
+    {
+        TextureID id;
+        unsigned number;
+    };
+
+    enum class ImageType { JPG, PNG };
+    const auto createTextureID = [&deleteTexture](const char* const filepath, const ImageType imageType)
+    {
+        if (imageType != ImageType::JPG && imageType != ImageType::PNG)
+            throw std::domain_error{ "Unhandled texture image type" };
+
+        if (imageType == ImageType::PNG)
+            stbi_set_flip_vertically_on_load(true);
+        else
+            stbi_set_flip_vertically_on_load(false);
+
+        int width_ = 0, height_ = 0, numChans_ = 0;
+        std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> data{
+            stbi_load(filepath, &width_, &height_, &numChans_, 0), stbi_image_free };
+        if (!data)
+        {
+            const std::string errorMessage = std::string("Failed to load image: ") + filepath;
+            throw std::runtime_error{ errorMessage.c_str() };
+        }
+
+        unsigned id = 0u;
+        glGenTextures(1, &id);
+        glBindTexture(GL_TEXTURE_2D, id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        const int internalFormat = (imageType == ImageType::PNG) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
+            width_, height_, 0, internalFormat, GL_UNSIGNED_BYTE, data.get());
+
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        return TextureID(id, deleteTexture);
+    };
+
+    static const Texture blockTexture{ createTextureID(".\\Images\\block.jpg", ImageType::JPG), 0 };
+    static const Texture fontTexture{ createTextureID(".\\Images\\font.png", ImageType::PNG), 1 };
+
+    static const auto getUniformLocation = [](const unsigned program, const char* const name)
+    {
+        const int uniformLocation = glGetUniformLocation(program, name);
+        if (uniformLocation == -1)
+        {
+            const std::string errorMessage =
+                std::string("Could not find uniform: ") + name;
+            throw std::invalid_argument{ errorMessage.c_str() };
+        }
+
+        return uniformLocation;
+    };
 
     const auto renderTetriminoBlock = [&](const Colour& colour, const Position<int>& topLeft)
     {
         // + 0.0f here for type conversion to avoid casts
-        vertices[0] = topLeft.x + 0.0f;
-        vertices[1] = topLeft.y + 1.0f;
-        vertices[2] = 0.0f;
-        vertices[3] = 0.0f;
+        vertices.buffer[0] = topLeft.x + 0.0f;
+        vertices.buffer[1] = topLeft.y + 1.0f;
+        vertices.buffer[2] = 0.0f;
+        vertices.buffer[3] = 0.0f;
 
-        vertices[4] = topLeft.x + 1.0f;
-        vertices[5] = topLeft.y + 1.0f;
-        vertices[6] = 1.0f;
-        vertices[7] = 0.0f;
+        vertices.buffer[4] = topLeft.x + 1.0f;
+        vertices.buffer[5] = topLeft.y + 1.0f;
+        vertices.buffer[6] = 1.0f;
+        vertices.buffer[7] = 0.0f;
 
-        vertices[8] = topLeft.x + 1.0f;
-        vertices[9] = topLeft.y + 0.0f;
-        vertices[10] = 1.0f;
-        vertices[11] = 1.0f;
+        vertices.buffer[8] = topLeft.x + 1.0f;
+        vertices.buffer[9] = topLeft.y + 0.0f;
+        vertices.buffer[10] = 1.0f;
+        vertices.buffer[11] = 1.0f;
 
-        vertices[12] = topLeft.x + 0.0f;
-        vertices[13] = topLeft.y + 0.0f;
-        vertices[14] = 0.0f;
-        vertices[15] = 1.0f;
+        vertices.buffer[12] = topLeft.x + 0.0f;
+        vertices.buffer[13] = topLeft.y + 0.0f;
+        vertices.buffer[14] = 0.0f;
+        vertices.buffer[15] = 1.0f;
 
-        shaderProgram.use();
-        shaderProgram.setUniform("uColour", colour);
-        shaderProgram.setTextureUniform("uBlock", blockTexture.number());
+        glUseProgram(*shaderProgram);
+        const int colourUniformLocation = getUniformLocation(*shaderProgram, "uColour");
+        glUniform4f(colourUniformLocation, colour[0], colour[1], colour[2], colour[3]);
+        const int blockUniformLocation = getUniformLocation(*shaderProgram, "uBlock");
+        glUniform1i(blockUniformLocation, blockTexture.number);
 
-        vertices.bind();
-        vertices.bufferData(GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+        glBufferData(GL_ARRAY_BUFFER,
+           vertices.buffer.size() * sizeof(float), vertices.buffer.data(), GL_STATIC_DRAW);
 
-        blockTexture.makeActive();
+        glActiveTexture(GL_TEXTURE0 + blockTexture.number);
+        glBindTexture(GL_TEXTURE_2D, *blockTexture.id);
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
@@ -132,34 +269,38 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         const Position<float> textureTopLeft = textureCoordinates(c);
 
         // + 0.0f here for type conversion to avoid casts
-        vertices[0] = topLeft.x + 0.0f;
-        vertices[1] = topLeft.y + 1.0f;
-        vertices[2] = textureTopLeft.x;
-        vertices[3] = textureTopLeft.y - oneThird;
+        vertices.buffer[0] = topLeft.x + 0.0f;
+        vertices.buffer[1] = topLeft.y + 1.0f;
+        vertices.buffer[2] = textureTopLeft.x;
+        vertices.buffer[3] = textureTopLeft.y - oneThird;
 
-        vertices[4] = topLeft.x + 1.0f;
-        vertices[5] = topLeft.y + 1.0f;
-        vertices[6] = textureTopLeft.x + oneThirteenth;
-        vertices[7] = textureTopLeft.y - oneThird;
+        vertices.buffer[4] = topLeft.x + 1.0f;
+        vertices.buffer[5] = topLeft.y + 1.0f;
+        vertices.buffer[6] = textureTopLeft.x + oneThirteenth;
+        vertices.buffer[7] = textureTopLeft.y - oneThird;
 
-        vertices[8] = topLeft.x + 1.0f;
-        vertices[9] = topLeft.y + 0.0f;
-        vertices[10] = textureTopLeft.x + oneThirteenth;
-        vertices[11] = textureTopLeft.y;
+        vertices.buffer[8] = topLeft.x + 1.0f;
+        vertices.buffer[9] = topLeft.y + 0.0f;
+        vertices.buffer[10] = textureTopLeft.x + oneThirteenth;
+        vertices.buffer[11] = textureTopLeft.y;
 
-        vertices[12] = topLeft.x + 0.0f;
-        vertices[13] = topLeft.y + 0.0f;
-        vertices[14] = textureTopLeft.x;
-        vertices[15] = textureTopLeft.y;
+        vertices.buffer[12] = topLeft.x + 0.0f;
+        vertices.buffer[13] = topLeft.y + 0.0f;
+        vertices.buffer[14] = textureTopLeft.x;
+        vertices.buffer[15] = textureTopLeft.y;
 
-        shaderProgram.use();
-        shaderProgram.setUniform("uColour", { 1.0f, 1.0f, 1.0f, 1.0f });
-        shaderProgram.setTextureUniform("uBlock", fontTexture.number());
+        glUseProgram(*shaderProgram);
+        const int colourUniformLocation = getUniformLocation(*shaderProgram, "uColour");
+        glUniform4f(colourUniformLocation, White[0], White[1], White[2], White[3]);
+        const int blockUniformLocation = getUniformLocation(*shaderProgram, "uBlock");
+        glUniform1i(blockUniformLocation, fontTexture.number);
 
-        vertices.bind();
-        vertices.bufferData(GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+        glBufferData(GL_ARRAY_BUFFER,
+            vertices.buffer.size() * sizeof(float), vertices.buffer.data(), GL_STATIC_DRAW);
 
-        fontTexture.makeActive();
+        glActiveTexture(GL_TEXTURE0 + fontTexture.number);
+        glBindTexture(GL_TEXTURE_2D, *fontTexture.id);
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
