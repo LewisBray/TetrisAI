@@ -5,6 +5,7 @@
 
 #include "position.hpp"
 #include "render.h"
+#include "tetris.h"
 
 #include <functional>
 #include <fstream>
@@ -30,11 +31,76 @@ public:
     OpenGLID& operator=(const OpenGLID&) = delete;
     OpenGLID& operator=(OpenGLID&&) = default;
 
-    const unsigned& operator*() const noexcept { return id_; }
+    unsigned get() const noexcept { return id_; }
 
 private:
     unsigned id_ = 0u;
     Function release_{};
+};
+
+unsigned generateBuffer()
+{
+    unsigned id = 0;
+    glGenBuffers(1, &id);
+    return id;
+};
+
+static unsigned generateShader(const char* const sourceFilepath, const GLenum type)
+{
+    const unsigned id = glCreateShader(type);
+
+    const std::string sourceString = std::invoke([sourceFilepath]() {
+        std::ifstream inputFile{ sourceFilepath };
+
+        std::stringstream fileContents;
+        fileContents << inputFile.rdbuf();
+
+        return fileContents.str();
+        });
+
+    const char* const source = sourceString.c_str();
+    glShaderSource(id, 1, &source, 0);
+    glCompileShader(id);
+
+    return id;
+};
+
+enum class ImageType { JPG, PNG };
+
+static unsigned generateTexture(const char* const filepath, const ImageType imageType)
+{
+    if (imageType != ImageType::JPG && imageType != ImageType::PNG)
+        throw std::domain_error{ "Unhandled texture image type" };
+
+    if (imageType == ImageType::PNG)
+        stbi_set_flip_vertically_on_load(true);
+    else
+        stbi_set_flip_vertically_on_load(false);
+
+    int width_ = 0, height_ = 0, numChans_ = 0;
+    std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> data{
+        stbi_load(filepath, &width_, &height_, &numChans_, 0), stbi_image_free };
+    if (!data)
+    {
+        const std::string errorMessage = std::string("Failed to load image: ") + filepath;
+        throw std::runtime_error{ errorMessage.c_str() };
+    }
+
+    unsigned id = 0u;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    const int internalFormat = (imageType == ImageType::PNG) ? GL_RGBA : GL_RGB;
+    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
+        width_, height_, 0, internalFormat, GL_UNSIGNED_BYTE, data.get());
+
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    return id;
 };
 
 static constexpr float oneThird = 1.0f / 3.0f;
@@ -54,7 +120,7 @@ static Position<float> textureCoordinates(char c)
     if (isLetter)
     {
         c = std::toupper(c);
-        const int alphabetPosition = c - 'A';
+        const int alphabetPosition = static_cast<int>(c - 'A');
         const bool inFirstHalfOfAlphabet = (alphabetPosition / 13 == 0);
         const float top = 1.0f - (inFirstHalfOfAlphabet ? 0.0f : oneThird);
         const float left = (alphabetPosition % 13) * oneThirteenth;
@@ -63,7 +129,7 @@ static Position<float> textureCoordinates(char c)
     }
     else
     {
-        const int numericalValue = c - '0';
+        const int numericalValue = static_cast<int>(c - '0');
         const float left = numericalValue * oneThirteenth;
         return { left, oneThird };
     }
@@ -84,12 +150,6 @@ using namespace Tetris;
 void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
     const Grid& grid, const int score, const int rowsCleared)
 {
-    constexpr auto createArrayBufferID = []() {
-        unsigned id = 0;
-        glGenBuffers(1, &id);
-        return id;
-    };
-
     constexpr auto deleteArrayBuffer = [](unsigned& id) { glDeleteBuffers(1, &id); };
     using ArrayBufferID = OpenGLID<decltype(deleteArrayBuffer)>;
     struct QuadrilateralArrayBuffer
@@ -99,7 +159,7 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
     };
 
     static QuadrilateralArrayBuffer vertices{
-        ArrayBufferID(createArrayBufferID(), deleteArrayBuffer), 
+        ArrayBufferID(generateBuffer(), deleteArrayBuffer), 
         // vertex       // texture
         0.0f, 0.0f,     0.0f, 0.0f,
         0.0f, 0.0f,     1.0f, 0.0f,
@@ -107,7 +167,7 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         0.0f, 0.0f,     0.0f, 1.0f
     };
 
-    glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+    glBindBuffer(GL_ARRAY_BUFFER, vertices.id.get());
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
@@ -124,47 +184,28 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
     };
 
     static QuadrilateralIndexBuffer indices{
-        ArrayBufferID(createArrayBufferID(), deleteArrayBuffer),
+        ArrayBufferID(generateBuffer(), deleteArrayBuffer),
         0, 1, 2, 2, 3, 0
     };
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indices.id);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices.id.get());
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
         indices.buffer.size() * sizeof(unsigned), indices.buffer.data(), GL_STATIC_DRAW);
 
     using ShaderID = OpenGLID<decltype(glDeleteShader)>;
-    const auto createShaderID = [](const char* const sourceFilepath, const GLenum type)
-    {
-        const unsigned id = glCreateShader(type);
 
-        const std::string sourceString = std::invoke([sourceFilepath]() {
-            std::ifstream inputFile{ sourceFilepath };
-
-            std::stringstream fileContents;
-            fileContents << inputFile.rdbuf();
-
-            return fileContents.str();
-        });
-
-        const char* const source = sourceString.c_str();
-        glShaderSource(id, 1, &source, 0);
-        glCompileShader(id);
-
-        return ShaderID(id, glDeleteShader);
-    };
-
-    static const ShaderID vertexShader = createShaderID(".\\Shaders\\vertex.shader", GL_VERTEX_SHADER);
-    static const ShaderID fragmentShader = createShaderID(".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER);
+    static const ShaderID vertexShader(generateShader(".\\Shaders\\vertex.shader", GL_VERTEX_SHADER), glDeleteShader);
+    static const ShaderID fragmentShader(generateShader(".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER), glDeleteShader);
 
     using ProgramID = OpenGLID<decltype(glDeleteProgram)>;
     static const ProgramID shaderProgram(glCreateProgram(), glDeleteProgram);
-    glAttachShader(*shaderProgram, *vertexShader);
-    glAttachShader(*shaderProgram, *fragmentShader);
+    glAttachShader(shaderProgram.get(), vertexShader.get());
+    glAttachShader(shaderProgram.get(), fragmentShader.get());
 
-    glValidateProgram(*shaderProgram);
-    glLinkProgram(*shaderProgram);
+    glValidateProgram(shaderProgram.get());
+    glLinkProgram(shaderProgram.get());
 
-    const auto deleteTexture = [](unsigned& id) { glDeleteTextures(1, &id); };
+    constexpr auto deleteTexture = [](unsigned& id) { glDeleteTextures(1, &id); };
     using TextureID = OpenGLID<decltype(deleteTexture)>;
     struct Texture
     {
@@ -172,41 +213,8 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         unsigned number;
     };
 
-    enum class ImageType { JPG, PNG };
-    const auto createTextureID = [&deleteTexture](const char* const filepath, const ImageType imageType)
-    {
-        if (imageType != ImageType::JPG && imageType != ImageType::PNG)
-            throw std::domain_error{ "Unhandled texture image type" };
-
-        if (imageType == ImageType::PNG)
-            stbi_set_flip_vertically_on_load(true);
-        else
-            stbi_set_flip_vertically_on_load(false);
-
-        int width_ = 0, height_ = 0, numChans_ = 0;
-        std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> data{
-            stbi_load(filepath, &width_, &height_, &numChans_, 0), stbi_image_free };
-        if (!data)
-        {
-            const std::string errorMessage = std::string("Failed to load image: ") + filepath;
-            throw std::runtime_error{ errorMessage.c_str() };
-        }
-
-        unsigned id = 0u;
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        const int internalFormat = (imageType == ImageType::PNG) ? GL_RGBA : GL_RGB;
-        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat,
-            width_, height_, 0, internalFormat, GL_UNSIGNED_BYTE, data.get());
-
-        glGenerateMipmap(GL_TEXTURE_2D);
-
-        return TextureID(id, deleteTexture);
+    constexpr auto createTextureID = [deleteTexture](const char* const filepath, const ImageType imageType) {
+        return TextureID(generateTexture(filepath, imageType), deleteTexture);
     };
 
     static const Texture blockTexture{ createTextureID(".\\Images\\block.jpg", ImageType::JPG), 0 };
@@ -248,18 +256,18 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         vertices.buffer[14] = 0.0f;
         vertices.buffer[15] = 1.0f;
 
-        glUseProgram(*shaderProgram);
-        const int colourUniformLocation = getUniformLocation(*shaderProgram, "uColour");
+        glUseProgram(shaderProgram.get());
+        const int colourUniformLocation = getUniformLocation(shaderProgram.get(), "uColour");
         glUniform4f(colourUniformLocation, colour[0], colour[1], colour[2], colour[3]);
-        const int blockUniformLocation = getUniformLocation(*shaderProgram, "uBlock");
+        const int blockUniformLocation = getUniformLocation(shaderProgram.get(), "uBlock");
         glUniform1i(blockUniformLocation, blockTexture.number);
 
-        glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+        glBindBuffer(GL_ARRAY_BUFFER, vertices.id.get());
         glBufferData(GL_ARRAY_BUFFER,
            vertices.buffer.size() * sizeof(float), vertices.buffer.data(), GL_STATIC_DRAW);
 
         glActiveTexture(GL_TEXTURE0 + blockTexture.number);
-        glBindTexture(GL_TEXTURE_2D, *blockTexture.id);
+        glBindTexture(GL_TEXTURE_2D, blockTexture.id.get());
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
@@ -289,23 +297,23 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         vertices.buffer[14] = textureTopLeft.x;
         vertices.buffer[15] = textureTopLeft.y;
 
-        glUseProgram(*shaderProgram);
-        const int colourUniformLocation = getUniformLocation(*shaderProgram, "uColour");
+        glUseProgram(shaderProgram.get());
+        const int colourUniformLocation = getUniformLocation(shaderProgram.get(), "uColour");
         glUniform4f(colourUniformLocation, White[0], White[1], White[2], White[3]);
-        const int blockUniformLocation = getUniformLocation(*shaderProgram, "uBlock");
+        const int blockUniformLocation = getUniformLocation(shaderProgram.get(), "uBlock");
         glUniform1i(blockUniformLocation, fontTexture.number);
 
-        glBindBuffer(GL_ARRAY_BUFFER, *vertices.id);
+        glBindBuffer(GL_ARRAY_BUFFER, vertices.id.get());
         glBufferData(GL_ARRAY_BUFFER,
             vertices.buffer.size() * sizeof(float), vertices.buffer.data(), GL_STATIC_DRAW);
 
         glActiveTexture(GL_TEXTURE0 + fontTexture.number);
-        glBindTexture(GL_TEXTURE_2D, *fontTexture.id);
+        glBindTexture(GL_TEXTURE_2D, fontTexture.id.get());
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     };
 
-    const auto renderText = [&](const std::string_view& text, Position<int> topLeft)
+    const auto renderText = [&renderCharacter](const std::string_view& text, Position<int> topLeft)
     {
         for (const char c : text) {
             renderCharacter(c, topLeft);

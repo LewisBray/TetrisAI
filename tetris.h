@@ -44,9 +44,6 @@ namespace Tetris
         Type type_ = Type::T;
     };
 
-    Tetrimino randomTetrimino(const Position<int>& position);
-    Tetrimino::Blocks nextTetriminoBlockDisplayLocations(Tetrimino::Type type);
-
     class Grid
     {
     public:
@@ -64,5 +61,6 @@ namespace Tetris
         std::array<std::array<Cell, Columns>, Rows> grid_;
     };
 
-    bool collision(const Tetrimino& tetrimino, const Grid& grid);
+    void play();
+    Tetrimino::Blocks nextTetriminoBlockDisplayLocations(Tetrimino::Type type);
 }
