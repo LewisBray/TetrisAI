@@ -8,9 +8,11 @@
 #include "tetris.h"
 
 #include <functional>
+#include <stdexcept>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <memory>
 #include <string>
 #include <cctype>
 
@@ -56,7 +58,7 @@ static unsigned generateShader(const char* const sourceFilepath, const GLenum ty
         fileContents << inputFile.rdbuf();
 
         return fileContents.str();
-        });
+    });
 
     const char* const source = sourceString.c_str();
     glShaderSource(id, 1, &source, 0);
@@ -144,9 +146,6 @@ static std::string formatScore(const int score)
 }
 
 using namespace Tetris;
-
-// This will need some refactoring later but at least I can
-// remove the rendering logic from the game loop logic
 void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
     const Grid& grid, const int score, const int rowsCleared)
 {
@@ -193,7 +192,6 @@ void renderScene(const Tetrimino& tetrimino, const Tetrimino& nextTetrimino,
         indices.buffer.size() * sizeof(unsigned), indices.buffer.data(), GL_STATIC_DRAW);
 
     using ShaderID = OpenGLID<decltype(glDeleteShader)>;
-
     static const ShaderID vertexShader(generateShader(".\\Shaders\\vertex.shader", GL_VERTEX_SHADER), glDeleteShader);
     static const ShaderID fragmentShader(generateShader(".\\Shaders\\fragment.shader", GL_FRAGMENT_SHADER), glDeleteShader);
 

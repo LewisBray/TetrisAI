@@ -21,45 +21,30 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="glfw.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="render.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="input.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="tetris.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="currenttime.cpp">
+    <ClCompile Include="neuralnetwork.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="glfw.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="position.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="colour.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="keystate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="render.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="input.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="tetris.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="currenttime.h">
+    <ClInclude Include="input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="neuralnetwork.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

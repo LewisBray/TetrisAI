@@ -1,25 +1,46 @@
 #include "GLEW\\glew.h"
+#include "GLFW\\glfw3.h"
 
-#include "currenttime.h"
 #include "tetris.h"
 #include "render.h"
 #include "input.h"
-#include "glfw.h"
 
+#include <unordered_map>
 #include <stdexcept>
 #include <utility>
+#include <fstream>
 #include <sstream>
 #include <random>
 #include <chrono>
 
+// Calling glfwTerminate also clears up any windows/resources so
+// making this RAII struct to make sure it's definitely called
+struct GLFW
+{
+    GLFW()
+    {
+        if (!glfwInit())
+            throw std::runtime_error{ "Failed to initialise GLFW" };
+    }
 
-#include <iostream>
-#include <fstream>
+    ~GLFW()
+    {
+        glfwTerminate();
+    }
+};
 
-std::array<char, 56> writeGameStateToBuffer(const int difficultyLevel,
+static std::chrono::microseconds currentTime()
+{
+    using namespace std::chrono;
+
+    const auto clockTime = steady_clock().now();
+    return duration_cast<microseconds>(clockTime.time_since_epoch());
+}
+
+static std::array<char, 56> writeGameStateToBuffer(const int difficultyLevel,
     const int rowsCleared, const Tetris::Tetrimino::Type nextTetriminoType,
-    const Tetris::Tetrimino & currentTetrimino, const Tetris::Grid & grid,
-    const InputHistory & inputHistory)
+    const Tetris::Tetrimino& currentTetrimino, const Tetris::Grid& grid,
+    const InputHistory& inputHistory)
 {
     std::array<char, 56> buffer{};
     std::copy_n(reinterpret_cast<const char*>(&difficultyLevel), 4, buffer.begin());
@@ -61,33 +82,7 @@ std::array<char, 56> writeGameStateToBuffer(const int difficultyLevel,
     return buffer;
 }
 
-std::array<double, 188> toNeuralNetworkInputs(const std::array<char, 56> & gameStateFromFile) noexcept
-{
-    std::array<double, 188> inputs{};
-    const char* const data = gameStateFromFile.data();
-    inputs[0] = static_cast<double>(*reinterpret_cast<const std::int32_t*>(data));
-    inputs[1] = static_cast<double>(*reinterpret_cast<const std::int32_t*>(data + 4));
-    inputs[2] = static_cast<double>(*reinterpret_cast<const char*>(data + 8));
-    inputs[3] = static_cast<double>(*reinterpret_cast<const char*>(data + 9));
-
-    for (int index = 4, offset = 10; index <= 4 + 4; index += 2, offset += 2)
-    {
-        const std::int16_t encodedBlockPosition = *reinterpret_cast<const std::int16_t*>(data + offset);
-        inputs[index] = static_cast<double>(encodedBlockPosition & 0xFF00);
-        inputs[index + 1] = static_cast<double>(encodedBlockPosition & 0xFF);
-    }
-
-    for (int row = 0, index = 12, offset = 18; row < Tetris::Grid::Rows; ++row)
-    {
-        const std::int16_t rowState = *reinterpret_cast<const std::int16_t*>(data + offset);
-        for (int column = 0; column < Tetris::Grid::Columns; ++column, ++index, ++offset)
-            inputs[index] = static_cast<double>((rowState & (1 << column)) != 0);
-    }
-
-    return inputs;
-}
-
-std::array<double, 188> toNeuralNetworkInputs(const int difficultyLevel,
+static std::array<double, 188> toNeuralNetworkInputs(const int difficultyLevel,
     const int rowsCleared, const Tetris::Tetrimino::Type nextTetriminoType,
     const Tetris::Tetrimino & currentTetrimino, const Tetris::Grid & grid,
     const InputHistory & inputHistory)
@@ -113,27 +108,18 @@ std::array<double, 188> toNeuralNetworkInputs(const int difficultyLevel,
     return inputs;
 }
 
-constexpr std::array<double, 5> toNeuralNetworkOuputs(const char encodedInputs) noexcept
-{
-    std::array<double, 5> outputs{};
-    for (std::size_t i = 0; i < outputs.size(); ++i)
-        outputs[i] = ((encodedInputs << i) != 0);
-
-    return outputs;
-}
-
-constexpr PlayerInput toPlayerInput(const std::array<double, 5> & neuralNetworkOuput) noexcept
+static constexpr PlayerInput toPlayerInput(const std::array<double, 5>& neuralNetworkOutput) noexcept
 {
     constexpr auto toKeyState = [](const double d) noexcept {
-        return ((d == 0.0) ? KeyState::Released : KeyState::Pressed);
+        return (d == 0.0) ? KeyState::Released : KeyState::Pressed;
     };
 
     PlayerInput translatedInput{};
-    translatedInput.down = toKeyState(neuralNetworkOuput[0]);
-    translatedInput.left = toKeyState(neuralNetworkOuput[1]);
-    translatedInput.right = toKeyState(neuralNetworkOuput[2]);
-    translatedInput.rotateClockwise = toKeyState(neuralNetworkOuput[3]);
-    translatedInput.rotateAntiClockwise = toKeyState(neuralNetworkOuput[4]);
+    translatedInput.down = toKeyState(neuralNetworkOutput[0]);
+    translatedInput.left = toKeyState(neuralNetworkOutput[1]);
+    translatedInput.right = toKeyState(neuralNetworkOutput[2]);
+    translatedInput.clockwise = toKeyState(neuralNetworkOutput[3]);
+    translatedInput.antiClockwise = toKeyState(neuralNetworkOutput[4]);
 
     return translatedInput;
 }
@@ -305,42 +291,34 @@ namespace Tetris
 		centre_ += shift;
 	}
 
-    static bool shouldMove(
-        const Tetrimino::Direction direction, const InputHistory& inputHistory)
+    static bool shouldMove(const Tetrimino::Direction direction, const InputHistory& inputHistory)
     {
-        static constexpr int Delay = 3;
+
+        constexpr auto check = [](const KeyStateHistory& keyStateHistory) noexcept {
+            static constexpr int Delay = 3;
+
+            return ((keyStateHistory.currentState == KeyState::Pressed &&
+                keyStateHistory.previousState != KeyState::Pressed) ||
+                (keyStateHistory.currentState == KeyState::Held &&
+                keyStateHistory.numUpdatesInHeldState % Delay == 0));
+        };
 
         switch (direction)
         {
         case Tetrimino::Direction::Down:
-            return ((inputHistory.down.currentState == KeyState::Pressed &&
-                inputHistory.down.previousState != KeyState::Pressed) ||
-                (inputHistory.down.currentState == KeyState::Held &&
-                inputHistory.down.numUpdatesInHeldState % Delay == 0));
+            return check(inputHistory.down);
 
         case Tetrimino::Direction::Left:
-            return ((inputHistory.left.currentState == KeyState::Pressed &&
-                inputHistory.left.previousState != KeyState::Pressed) ||
-                (inputHistory.left.currentState == KeyState::Held &&
-                inputHistory.left.numUpdatesInHeldState % Delay == 0));
+            return check(inputHistory.left);
 
         case Tetrimino::Direction::Right:
-            return ((inputHistory.right.currentState == KeyState::Pressed &&
-                inputHistory.right.previousState != KeyState::Pressed) ||
-                (inputHistory.right.currentState == KeyState::Held &&
-                inputHistory.right.numUpdatesInHeldState % Delay == 0));
+            return check(inputHistory.right);
 
         case Tetrimino::Direction::Clockwise:
-            return ((inputHistory.clockwise.currentState == KeyState::Pressed &&
-                inputHistory.clockwise.previousState != KeyState::Pressed) ||
-                (inputHistory.clockwise.currentState == KeyState::Held &&
-                inputHistory.clockwise.numUpdatesInHeldState % Delay == 0));
+            return check(inputHistory.clockwise);
         
         case Tetrimino::Direction::AntiClockwise:
-            return ((inputHistory.antiClockwise.currentState == KeyState::Pressed &&
-                inputHistory.antiClockwise.previousState != KeyState::Pressed) ||
-                (inputHistory.antiClockwise.currentState == KeyState::Held &&
-                inputHistory.antiClockwise.numUpdatesInHeldState % Delay == 0));
+            return check(inputHistory.antiClockwise);
 
         default:
             throw std::domain_error {
@@ -378,7 +356,7 @@ namespace Tetris
         }
 
         // Fastest we can get is 6 drops per second
-        const int updatesAllowedBeforeDrop = std::invoke([&difficultyLevel](){
+        const int updatesAllowedBeforeDrop = std::invoke([&difficultyLevel]() {
             const int updatesAllowed = 120 - 5 * (difficultyLevel - 1);
             return (updatesAllowed < 10) ? 10 : updatesAllowed;
         });
@@ -412,10 +390,7 @@ namespace Tetris
                 rotate(Direction::Clockwise);
         }
 
-        if (dropTetrimino)
-            return std::make_pair(false, 0);
-        else
-            return std::make_pair(false, updatesSinceLastDrop);
+        return std::make_pair(false, dropTetrimino ? 0 : updatesSinceLastDrop);
     }
 
     bool Tetrimino::resolveRotationCollision(const Grid& grid) noexcept
@@ -458,8 +433,7 @@ namespace Tetris
         return blockLocations(type, DisplayLocationTopLeft);
     }
 
-    const std::array<Grid::Cell, Grid::Columns>&
-        Grid::operator[](const int row) const noexcept
+    const std::array<Grid::Cell, Grid::Columns>& Grid::operator[](const int row) const noexcept
     {
         return grid_[row];
     }
@@ -467,9 +441,9 @@ namespace Tetris
     int Grid::removeCompletedRows() noexcept
     {
         constexpr auto rowIsComplete =
-            [](const std::array<Cell, Columns> & row) noexcept {
+            [](const std::array<Cell, Columns>& row) noexcept {
                 return std::all_of(row.begin(), row.end(),
-                    [](const Cell & cell) { return cell.has_value(); });
+                    [](const Cell& cell) { return cell.has_value(); });
         };
 
         const auto startOfRemovedRows =
@@ -496,14 +470,79 @@ namespace Tetris
             grid_[block.y][block.x] = tetriminoColour;
     }
 
+    // I can't seem to come up with a way to not make this global or put
+    // it in its own tiny .cpp file so going with this approach for now
+    using KeyStateMap = std::unordered_map<char, KeyState>;
+    KeyStateMap keyStateMap = {
+        { 'A', KeyState::Released },
+        { 'S', KeyState::Released },
+        { 'D', KeyState::Released },
+        { 'J', KeyState::Released },
+        { 'K', KeyState::Released }
+    };
+
+    void keyStateCallback(GLFWwindow* const window, const int key,
+        const int scancode, const int action, const int mods)
+    {
+        const KeyState newState = std::invoke([action]() {
+            if (action == GLFW_PRESS)
+                return KeyState::Pressed;
+            else if (action == GLFW_REPEAT)
+                return KeyState::Held;
+            else
+                return KeyState::Released;
+        });
+
+        const char keyAsChar = std::toupper(static_cast<char>(key));
+        keyStateMap[keyAsChar] = newState;
+    }
+
+    PlayerInput getPlayerInput()
+    {
+        const KeyState down = keyStateMap['S'];
+        const KeyState left = keyStateMap['A'];
+        const KeyState right = keyStateMap['D'];
+        const KeyState clockwise = keyStateMap['K'];
+        const KeyState antiClockwise = keyStateMap['J'];
+
+        return { down, left, right, clockwise, antiClockwise };
+    }
+
+    InputHistory update(InputHistory inputHistory, const PlayerInput& playerInput)
+    {
+        const auto updateKeyStateHistory =
+            [](const KeyState newKeyState, const KeyState oldKeyState, int numUpdatesInHeldState) noexcept {
+                if (newKeyState == KeyState::Held && oldKeyState == KeyState::Held)
+                    ++numUpdatesInHeldState;
+                else
+                    numUpdatesInHeldState = 0;
+                return KeyStateHistory{ newKeyState, oldKeyState, numUpdatesInHeldState };
+        };
+
+        inputHistory.down = updateKeyStateHistory(playerInput.down,
+            inputHistory.down.currentState, inputHistory.down.numUpdatesInHeldState);
+        inputHistory.left = updateKeyStateHistory(playerInput.left,
+            inputHistory.left.currentState, inputHistory.left.numUpdatesInHeldState);
+        inputHistory.right = updateKeyStateHistory(playerInput.right,
+            inputHistory.right.currentState, inputHistory.right.numUpdatesInHeldState);
+        inputHistory.clockwise = updateKeyStateHistory(playerInput.clockwise,
+            inputHistory.clockwise.currentState, inputHistory.clockwise.numUpdatesInHeldState);
+        inputHistory.antiClockwise = updateKeyStateHistory(playerInput.antiClockwise,
+            inputHistory.antiClockwise.currentState, inputHistory.antiClockwise.numUpdatesInHeldState);
+
+        return inputHistory;
+    }
+
     void play()
     {
-        using namespace std::chrono_literals;
+        const GLFW glfw;
+        
+        GLFWwindow* const window = glfwCreateWindow(640, 480, "Tetris AI", NULL, NULL);
+        if (window == nullptr)
+            throw std::runtime_error{ "Failed to create window" };
 
-        const GLFW::GLFW glfw;
-
-        const GLFW::Window window(640, 480, "Tetris AI");
-        window.makeCurrentContext();
+        glfwSetKeyCallback(window, keyStateCallback);
+        glfwMakeContextCurrent(window);
 
         if (glewInit() != GLEW_OK)
             throw std::runtime_error{ "Failed to initialise GLEW" };
@@ -516,9 +555,11 @@ namespace Tetris
 
         InputHistory inputHistory;
         int playerScore = 0, totalRowsCleared = 0, updatesSinceLastDrop = 0;
+
+        using namespace std::chrono_literals;
         static constexpr auto frameDuration = 16667us;      // ~60fps
         auto accumulatedTime = 0us, previousTime = currentTime();
-        while (!window.shouldClose())
+        while (!glfwWindowShouldClose(window))
         {
             const auto time = currentTime();
             accumulatedTime += time - previousTime;
@@ -526,7 +567,9 @@ namespace Tetris
 
             while (accumulatedTime >= frameDuration)
             {
-                inputHistory.update(getPlayerInput(window));
+                const PlayerInput playerInput = getPlayerInput();
+                inputHistory = update(inputHistory, playerInput);
+
                 const int difficultyLevel = totalRowsCleared / 10 + 1;
 
                 const auto gameStateInBuffer = writeGameStateToBuffer(difficultyLevel,
@@ -564,8 +607,8 @@ namespace Tetris
 
             renderScene(tetrimino, nextTetrimino, grid, playerScore, totalRowsCleared);
 
-            window.swapBuffers();
-            GLFW::pollEvents();
+            glfwSwapBuffers(window);
+            glfwPollEvents();
         }
     }
 }

@@ -1,6 +1,9 @@
+#include "neuralnetwork.h"
 #include "tetris.h"
 
+#include <functional>
 #include <exception>
+#include <stdexcept>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -26,14 +29,25 @@ int main()
             return choice;
         });
 
+        NeuralNetwork neuralNetwork;
         switch (userChoice)
         {
         case 1:
             Tetris::play();
             break;
 
+        case 2:
+            Tetris::play();
+            break;
+
+        case 3:
+            neuralNetwork.loadFromFile("neural_network.txt");
+            neuralNetwork = train(neuralNetwork, "training_data.bin");
+            neuralNetwork.saveToFile("neural_network.txt");
+            break;
+
         default:
-            throw std::exception();
+            throw std::domain_error{ "Invalid user menu choice" };
         }
 
         return 0;

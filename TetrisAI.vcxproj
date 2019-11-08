@@ -80,20 +80,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="currenttime.cpp" />
+    <ClCompile Include="neuralnetwork.cpp" />
     <ClCompile Include="render.cpp" />
-    <ClCompile Include="glfw.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="input.cpp" />
     <ClCompile Include="tetris.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="colour.h" />
-    <ClInclude Include="currenttime.h" />
-    <ClInclude Include="render.h" />
-    <ClInclude Include="glfw.h" />
-    <ClInclude Include="keystate.h" />
     <ClInclude Include="input.h" />
+    <ClInclude Include="neuralnetwork.h" />
+    <ClInclude Include="render.h" />
     <ClInclude Include="position.hpp" />
     <ClInclude Include="tetris.h" />
   </ItemGroup>
