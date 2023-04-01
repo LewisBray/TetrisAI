@@ -6,11 +6,9 @@
 //  - stop drawing things individually, move into single buffer and do one draw call
 //  - handle resizing window
 //  - add padding around viewport to prevent skewing of square shapes
-//  - move .png files into resource file (remove stb_image)
 //  - refactor neural network stuff to not use awful lal
 //  - bring neural network stuff back into game
 //  - update types to use types defined by the API (DWORD, GLint, etc...)
-//  - change to different font file (dwarf fortress again?)
 //  - investigate using SIMD/multithreading for neural network heavy lifting
 
 #include "tetris.h"
@@ -23,12 +21,6 @@
 #include "util.cpp"
 
 #include "resource.h"
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
-#define STB_IMAGE_IMPLEMENTATION
-#include "..\STBImage\stb_image.h"
-#pragma clang diagnostic pop
 
 #include <Windows.h>
 #include <gl\GL.h>
@@ -386,6 +378,10 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
     const i32 colour_uniform_location = glGetUniformLocation(shader_program, "u_colour");
     const i32 sampler_uniform_location = glGetUniformLocation(shader_program, "u_sampler");
 
+    static constexpr u32 BLOCK_SIZE_PIXELS = 300;
+    const Resource block_texture_resource = load_resource(instance, ID_BLOCK_TEXTURE);
+    DEBUG_ASSERT(block_texture_resource.size == 4 * BLOCK_SIZE_PIXELS * BLOCK_SIZE_PIXELS)
+
     u32 block_texture_id = 0;
     glGenTextures(1, &block_texture_id);
     glBindTexture(GL_TEXTURE_2D, block_texture_id);
@@ -393,15 +389,10 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, BLOCK_SIZE_PIXELS, BLOCK_SIZE_PIXELS, 0, GL_RGBA, GL_UNSIGNED_BYTE, block_texture_resource.data);
 
-    // TODO: put loaded .png files into resource section
-    i32 block_texture_width = 0;
-    i32 block_texture_height = 0;
-    i32 block_texture_chan_count = 0;
-    stbi_set_flip_vertically_on_load(true);
-    const u8* const block_texture_data = stbi_load("Images\\block.png", &block_texture_width, &block_texture_height, &block_texture_chan_count, 0);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, block_texture_width, block_texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, block_texture_data);
+    const Resource font_texture_resource = load_resource(instance, ID_FONT_TEXTURE);
+    DEBUG_ASSERT(font_texture_resource.size == 4 * FONT_SET_WIDTH_PIXELS * FONT_SET_HEIGHT_PIXELS)
 
     u32 font_texture_id = 0;
     glGenTextures(1, &font_texture_id);
@@ -410,14 +401,7 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    i32 font_texture_width = 0;
-    i32 font_texture_height = 0;
-    i32 font_texture_chan_count = 0;
-    stbi_set_flip_vertically_on_load(true);
-    const u8* const font_texture_data = stbi_load("Images\\font.png", &font_texture_width, &font_texture_height, &font_texture_chan_count, 0);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, font_texture_width, font_texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, font_texture_data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, FONT_SET_WIDTH_PIXELS, FONT_SET_HEIGHT_PIXELS, 0, GL_RGBA, GL_UNSIGNED_BYTE, font_texture_resource.data);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

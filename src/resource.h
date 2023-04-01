@@ -1,2 +1,4 @@
 #define ID_VERTEX_SHADER    101
 #define ID_FRAGMENT_SHADER  102
+#define ID_BLOCK_TEXTURE    103
+#define ID_FONT_TEXTURE     104

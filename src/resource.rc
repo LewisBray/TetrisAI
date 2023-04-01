@@ -2,3 +2,5 @@
 
 ID_VERTEX_SHADER    RCDATA  ".\Shaders\vertex.shader"
 ID_FRAGMENT_SHADER  RCDATA  ".\Shaders\fragment.shader"
+ID_BLOCK_TEXTURE    RCDATA  ".\Images\block.bin"
+ID_FONT_TEXTURE     RCDATA  ".\Images\font.bin"
