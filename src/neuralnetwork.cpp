@@ -187,7 +187,7 @@ static constexpr NeuralNetwork::OutputLayer toNeuralNetworkOutputs(const std::in
     return outputs;
 }
 
-NeuralNetwork train(NeuralNetwork neuralNetwork, const char* const trainingDataFileName)
+static NeuralNetwork train(NeuralNetwork neuralNetwork, const char* const trainingDataFileName)
 {
     std::ifstream trainingDataFile{ trainingDataFileName, std::ios::binary };
 

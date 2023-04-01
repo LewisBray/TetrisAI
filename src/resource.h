@@ -1,0 +1,2 @@
+#define ID_VERTEX_SHADER    101
+#define ID_FRAGMENT_SHADER  102

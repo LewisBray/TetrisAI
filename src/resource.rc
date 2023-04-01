@@ -1,0 +1,4 @@
+#include "resource.h"
+
+ID_VERTEX_SHADER    RCDATA  ".\Shaders\vertex.shader"
+ID_FRAGMENT_SHADER  RCDATA  ".\Shaders\fragment.shader"

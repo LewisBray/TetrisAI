@@ -1,22 +1,20 @@
 #version 330 core
 
-in vec2 aVertexPos;
-in vec2 aTexturePos;
+in vec2 a_position;
+in vec2 a_texture_coords;
 
-out vec2 texturePos;
+out vec2 texture_coords;
 
-void main()
-{
-    mat4 transform = mat4(
-       1.0 / 10.0,        0.0, 0.0, 0.0,
-              0.0, -1.0 / 9.0, 0.0, 0.0,
-              0.0,        0.0, 1.0, 0.0,
-             -1.0,        1.0, 0.0, 1.0
+void main() {
+    mat2 scaling = mat2(
+        1.0 / 10.0,        0.0,
+               0.0, -1.0 / 9.0
     );
 
-    vec4 position = vec4(aVertexPos, 1.0, 1.0);
+    vec2 translation = vec2(-1.0, 1.0);
 
-    gl_Position = transform * position;
+    vec2 position = scaling * a_position + translation;
 
-    texturePos = aTexturePos;
+    gl_Position = vec4(position, 0.0, 1.0);
+    texture_coords = a_texture_coords;
 }

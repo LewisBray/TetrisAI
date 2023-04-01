@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NEURALNETWORK_H
+#define NEURALNETWORK_H
 
 #include "matrix.hpp"
 
@@ -33,4 +34,6 @@ private:
     OutputLayer outputBiases_;
 };
 
-NeuralNetwork train(NeuralNetwork neuralNetwork, const char* trainingDataFile);
+static NeuralNetwork train(NeuralNetwork neuralNetwork, const char* trainingDataFile);
+
+#endif
