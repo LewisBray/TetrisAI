@@ -60,26 +60,22 @@ static constexpr GLenum GL_VERTEX_SHADER = 0x8B31;
 auto name = reinterpret_cast<type>(wglGetProcAddress(#name));
 
 // Rendering
-static constexpr float ONE_THIRD = 1.0f / 3.0f;
-static constexpr float ONE_THIRTEENTH = 1.0f / 13.0f;
+static constexpr u32 FONT_SET_WIDTH = 16;
+static constexpr u32 FONT_SET_HEIGHT = 16;
+static constexpr u32 FONT_WIDTH_PIXELS = 16;
+static constexpr u32 FONT_HEIGHT_PIXELS = 16;
+static constexpr u32 FONT_SET_WIDTH_PIXELS = FONT_SET_WIDTH * FONT_WIDTH_PIXELS;
+static constexpr u32 FONT_SET_HEIGHT_PIXELS = FONT_SET_HEIGHT * FONT_HEIGHT_PIXELS;
+static constexpr f32 FONT_WIDTH_NORMALISED = static_cast<f32>(FONT_WIDTH_PIXELS) / static_cast<f32>(FONT_SET_WIDTH_PIXELS);
+static constexpr f32 FONT_HEIGHT_NORMALISED = static_cast<f32>(FONT_HEIGHT_PIXELS) / static_cast<f32>(FONT_SET_HEIGHT_PIXELS);
 
-// Will probably want to cache all these calculated values eventually
 static Vec2 texture_coordinates(const char c) {
-    const bool is_capital_letter = 'A' <= c && c <= 'Z';
-    // const bool is_digit = '0' <= c && c <= '9';
-    // TODO: assert here
-    if (is_capital_letter) {
-        const i32 alphabet_position = static_cast<i32>(c - 'A');
-        const bool in_first_half_of_alphabet = (alphabet_position / 13 == 0);
-        const f32 top = 1.0f - (in_first_half_of_alphabet ? 0.0f : ONE_THIRD);
-        const f32 left = static_cast<f32>(alphabet_position % 13) * ONE_THIRTEENTH;
+    const u32 x = static_cast<u32>(c) % FONT_SET_WIDTH;
+    const u32 y = FONT_SET_HEIGHT - static_cast<u32>(c) / FONT_SET_WIDTH;
+    const f32 x_normalised = FONT_WIDTH_NORMALISED * static_cast<f32>(x);
+    const f32 y_normalised = FONT_HEIGHT_NORMALISED * static_cast<f32>(y);
 
-        return Vec2{left, top};
-    } else {
-        const f32 numerical_value = static_cast<f32>(c - '0');
-        const f32 left = numerical_value * ONE_THIRTEENTH;
-        return Vec2{left, ONE_THIRD};
-    }
+    return Vec2{x_normalised, y_normalised};
 }
 
 // user input
@@ -402,9 +398,10 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
     i32 block_texture_width = 0;
     i32 block_texture_height = 0;
     i32 block_texture_chan_count = 0;
-    const u8* const block_texture_data = stbi_load("Images\\block.jpg", &block_texture_width, &block_texture_height, &block_texture_chan_count, 0);
+    stbi_set_flip_vertically_on_load(true);
+    const u8* const block_texture_data = stbi_load("Images\\block.png", &block_texture_width, &block_texture_height, &block_texture_chan_count, 0);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, block_texture_width, block_texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, block_texture_data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, block_texture_width, block_texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, block_texture_data);
 
     u32 font_texture_id = 0;
     glGenTextures(1, &font_texture_id);
@@ -468,16 +465,16 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
         vertices[0].position.x = top_left.x + 0.0f;
         vertices[0].position.y = top_left.y + 1.0f;
         vertices[0].texture_coords.x = texture_top_left.x;
-        vertices[0].texture_coords.y = texture_top_left.y - ONE_THIRD;
+        vertices[0].texture_coords.y = texture_top_left.y - FONT_HEIGHT_NORMALISED;
 
         vertices[1].position.x = top_left.x + 1.0f;
         vertices[1].position.y = top_left.y + 1.0f;
-        vertices[1].texture_coords.x = texture_top_left.x + ONE_THIRTEENTH;
-        vertices[1].texture_coords.y = texture_top_left.y - ONE_THIRD;
+        vertices[1].texture_coords.x = texture_top_left.x + FONT_WIDTH_NORMALISED;
+        vertices[1].texture_coords.y = texture_top_left.y - FONT_HEIGHT_NORMALISED;
 
         vertices[2].position.x = top_left.x + 1.0f;
         vertices[2].position.y = top_left.y + 0.0f;
-        vertices[2].texture_coords.x = texture_top_left.x + ONE_THIRTEENTH;
+        vertices[2].texture_coords.x = texture_top_left.x + FONT_WIDTH_NORMALISED;
         vertices[2].texture_coords.y = texture_top_left.y;
 
         vertices[3].position.x = top_left.x + 0.0f;
