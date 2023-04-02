@@ -1,27 +1,11 @@
 #ifndef TETRIS_H
 #define TETRIS_H
 
+#include "colour.h"
 #include "maths.h"
 #include "types.h"
 
 namespace Tetris {
-    struct Colour {
-        f32 r;
-        f32 g;
-        f32 b;
-        f32 a;
-    };
-
-    constexpr Colour RED = Colour{1.0f, 0.0f, 0.0f, 1.0f};
-    constexpr Colour GREEN = Colour{0.0f, 1.0f, 0.0f, 1.0f};
-    constexpr Colour BLUE = Colour{0.0f, 0.0f, 1.0f, 1.0f};
-    constexpr Colour YELLOW = Colour{1.0f, 1.0f, 0.0f, 1.0f};
-    constexpr Colour PURPLE = Colour{1.0f, 0.0f, 1.0f, 1.0f};
-    constexpr Colour CYAN = Colour{0.0f, 1.0f, 1.0f, 1.0f};
-    constexpr Colour WHITE = Colour{1.0f, 1.0f, 1.0f, 1.0f};
-    constexpr Colour BLACK = Colour{0.0f, 0.0f, 0.0f, 1.0f};
-    constexpr Colour GREY = Colour{0.2f, 0.2f, 0.2f, 1.0f};
-
 	struct Tetrimino {
         struct Blocks {
             static constexpr i32 COUNT = 4;

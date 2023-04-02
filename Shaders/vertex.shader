@@ -1,9 +1,11 @@
 #version 330 core
 
-in vec2 a_position;
-in vec2 a_texture_coords;
+layout (location = 0) in vec2 a_position;
+layout (location = 1) in vec2 a_texture_coords;
+layout (location = 2) in vec4 a_colour;
 
-out vec2 texture_coords;
+out vec2 frag_texture_coords;
+out vec4 frag_colour;
 
 void main() {
     mat2 scaling = mat2(
@@ -16,5 +18,6 @@ void main() {
     vec2 position = scaling * a_position + translation;
 
     gl_Position = vec4(position, 0.0, 1.0);
-    texture_coords = a_texture_coords;
+    frag_texture_coords = a_texture_coords;
+    frag_colour = a_colour;
 }
