@@ -173,7 +173,7 @@ namespace Tetris {
         return tetrimino;
     }
 
-    static bool collision(const Tetrimino& tetrimino, const Grid& grid) {
+    bool collision(const Tetrimino& tetrimino, const Grid& grid) {
         for (i32 block_index = 0; block_index < Tetrimino::Blocks::COUNT; ++block_index) {
             const Coordinates& block_top_left = tetrimino.blocks.top_left_coordinates[block_index];
             const bool overlaps_grid = block_top_left.x < 0 ||

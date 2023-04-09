@@ -35,6 +35,7 @@ namespace Tetris {
 
     bool is_empty_cell(const Grid::Cell& grid_cell);
     i32 remove_completed_rows(Grid& grid);  // TODO: don't like mutable ref
+    bool collision(const Tetrimino& tetrimino, const Grid& grid);
     void merge(const Tetrimino& tetrimino, Grid& grid); // TODO: ditto
     bool resolve_rotation_collision(Tetrimino& tetrimino, const Grid& grid);
 }
