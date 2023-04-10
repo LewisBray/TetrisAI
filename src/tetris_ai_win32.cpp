@@ -1,5 +1,4 @@
 // TODO:
-//  - remove std lib + c runtime
 //  - fix bug when holding out of grid and rotating
 //  - fix user input being eaten by world update loop
 //  - handle resizing window
@@ -218,7 +217,10 @@ static GameCode load_game_code() {
     return game_code;
 }
 
-int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
+extern "C" int WinMainCRTStartup(); // shuts up compiler warning instructing to make static
+extern "C" int WinMainCRTStartup() {
+    const HINSTANCE instance = GetModuleHandle(NULL);
+
     GameCode game_code = load_game_code();
     FILETIME previous_game_dll_last_write_time = find_last_write_time(dll_name);
 
@@ -421,4 +423,6 @@ int WINAPI wWinMain(const HINSTANCE instance, HINSTANCE, PWSTR, int) {
             previous_game_dll_last_write_time = game_dll_last_write_time;
         }
     }
+
+    return 0;
 }

@@ -280,7 +280,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
 }
 
 extern "C" void render_game(const GameMemory& game_memory, const Platform& platform) {
-    // DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
+    DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     const GameState& game_state = *static_cast<const GameState*>(game_memory.permanent_storage);
 
     platform.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
