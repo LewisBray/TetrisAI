@@ -21,7 +21,8 @@ struct Scene {
 };
 
 static void render_tetrimino_block(Scene& scene, f32 x, f32 y, const Colour& colour);
-static void render_text(Scene& scene, const char* text, f32 x, f32 y);
+static void render_character(Scene& scene, i8 c, f32 x, f32 y);
+static void render_text(Scene& scene, const i8* text, f32 x, f32 y);
 static void render_integer(Scene& scene, i32 integer, f32 x, f32 y);
 
 #endif

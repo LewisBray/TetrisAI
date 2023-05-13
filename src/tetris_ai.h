@@ -8,11 +8,31 @@ struct Resource {
     u32 size;
 };
 
+struct File {
+    void* handle;
+};
+
+enum FileAccessFlags {
+    READ = 1,
+    WRITE = 2
+};
+
+enum FileCreationFlags {
+    USE_EXISTING = 0,
+    ALWAYS_CREATE = 1,
+    ALWAYS_OPEN = 2
+};
+
 struct Platform {
-    void(*show_error_box)(const char* title, const char* text);
+    void(*show_error_box)(const i8* title, const i8* text);
     i64(*query_performance_frequency)();
     i64(*query_performance_counter)();
     Resource(*load_resource)(i32 resource_id);
+    bool(*open_file)(const i8* file_name, FileAccessFlags file_access_flags, FileCreationFlags file_creation_flag, File& file);
+    u32(*get_file_size)(const File& file);
+    u32(*read_file_into_buffer)(const File& file, void* buffer, u32 bytes_to_read);
+    u32(*write_buffer_into_file)(const File& file, const void* buffer, u32 bytes_to_write);
+    void(*close_file)(File& file);
 
     void(*glViewport)(GLint, GLint, GLsizei, GLsizei);
     void(*glGenBuffers)(GLsizei, GLuint*);
@@ -50,8 +70,10 @@ struct PlayerInput {
 };
 
 struct GameMemory {
-    static constexpr u64 permanent_storage_size = 1024 * 1024;
+    static constexpr u64 PERMANENT_STORAGE_SIZE = 1024 * 1024;
     void* permanent_storage;
+    static constexpr u64 TRANSIENT_STORAGE_SIZE = 64 * 1024 * 1024;
+    void* transient_storage;
 };
 
 extern "C" {

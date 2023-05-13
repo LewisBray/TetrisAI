@@ -1,11 +1,8 @@
 // TODO:
-//  - fix bug when holding out of grid and rotating
-//  - fix user input being eaten by world update loop
 //  - handle resizing window
 //  - add padding around viewport to prevent skewing of square shapes
-//  - refactor neural network stuff to not use awful lal
-//  - bring neural network stuff back into game
 //  - investigate using SIMD/multithreading for neural network heavy lifting
+//  - menu for different modes (player controlled/recording; ai controller; train ai; playback training data; etc...)
 
 #include "tetris_ai.h"
 
@@ -17,7 +14,7 @@ auto name = reinterpret_cast<type>(wglGetProcAddress(#name));
 
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 
-static void show_error_box(const char* const title, const char* const text) {
+static void show_error_box(const i8* const title, const i8* const text) {
     MessageBoxA(NULL, text, title, MB_ICONERROR);
 }
 
@@ -48,6 +45,66 @@ static i64 query_performance_counter() {
     const BOOL read_counter = QueryPerformanceCounter(&counter);
     DEBUG_ASSERT(read_counter != FALSE);
     return counter.QuadPart;
+}
+
+static bool is_valid_handle(const HANDLE handle) {
+    return handle != NULL && handle != INVALID_HANDLE_VALUE;
+}
+
+static bool open_file(const i8* const file_name, const FileAccessFlags file_access_flags, const FileCreationFlags file_creation_flag, File& file) {
+    DWORD access = 0;
+    if ((file_access_flags & FileAccessFlags::READ) != 0) {
+        access |= GENERIC_READ;
+    }
+
+    if ((file_access_flags & FileAccessFlags::WRITE) != 0) {
+        access |= GENERIC_WRITE;
+    }
+
+    static constexpr DWORD CREATION_FLAGS_TRANSLATION[] = {OPEN_EXISTING, CREATE_ALWAYS, OPEN_ALWAYS};
+    const DWORD creation = CREATION_FLAGS_TRANSLATION[file_creation_flag];
+
+    file.handle = CreateFileA(file_name, access, 0, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);
+    return file.handle != INVALID_HANDLE_VALUE;
+}
+
+static u32 get_file_size(const File& file) {
+    DEBUG_ASSERT(is_valid_handle(file.handle));
+
+    LARGE_INTEGER file_size = {};
+    const BOOL got_file_size = GetFileSizeEx(file.handle, &file_size);
+    DEBUG_ASSERT(got_file_size != FALSE);
+
+    return static_cast<u32>(file_size.QuadPart);
+}
+
+static u32 read_file_into_buffer(const File& file, void* const buffer, const u32 bytes_to_read) {
+    DEBUG_ASSERT(is_valid_handle(file.handle));
+
+    DWORD bytes_read = 0;
+    const BOOL file_read = ReadFile(file.handle, buffer, static_cast<DWORD>(bytes_to_read), &bytes_read, nullptr);
+    DEBUG_ASSERT(file_read != FALSE);
+    DEBUG_ASSERT(bytes_read == bytes_to_read);
+
+    return bytes_read;
+}
+
+static u32 write_buffer_into_file(const File& file, const void* const buffer, const u32 bytes_to_write) {
+    DEBUG_ASSERT(is_valid_handle(file.handle));
+
+    DWORD bytes_written = 0;
+    const BOOL file_written = WriteFile(file.handle, buffer, static_cast<DWORD>(bytes_to_write), &bytes_written, nullptr);
+    DEBUG_ASSERT(file_written != FALSE);
+    DEBUG_ASSERT(bytes_written == bytes_to_write);
+
+    return bytes_written;
+}
+
+static void close_file(File& file) {
+    DEBUG_ASSERT(is_valid_handle(file.handle));
+
+    CloseHandle(file.handle);
+    file.handle = NULL;
 }
 
 struct KeyboardInput {
@@ -165,7 +222,7 @@ static LRESULT main_window_procedure(const HWND window, const UINT message, cons
     }
 }
 
-static FILETIME find_last_write_time(const char* const file_name) {
+static FILETIME find_last_write_time(const i8* const file_name) {
     WIN32_FIND_DATAA find_data = {};
     const HANDLE find_file_handle = FindFirstFileA(file_name, &find_data);
     DEBUG_ASSERT(find_file_handle != NULL);
@@ -183,10 +240,10 @@ struct GameCode {
     decltype(&render_game) render_proc;
 };
 
-static constexpr const char* dll_name = "tetris_ai.dll";
+static constexpr const i8* dll_name = "tetris_ai.dll";
 
 static GameCode load_game_code() {
-    static constexpr const char* temp_dll_name = "tetris_ai_temp.dll";
+    static constexpr const i8* temp_dll_name = "tetris_ai_temp.dll";
     
     GameCode game_code = {};
 
@@ -217,8 +274,8 @@ static GameCode load_game_code() {
     return game_code;
 }
 
-extern "C" int WinMainCRTStartup(); // shuts up compiler warning instructing to make static
-extern "C" int WinMainCRTStartup() {
+extern "C" [[noreturn]] void WinMainCRTStartup(); // shuts up compiler warning instructing to make static
+extern "C" [[noreturn]] void WinMainCRTStartup() {
     const HINSTANCE instance = GetModuleHandle(NULL);
 
     GameCode game_code = load_game_code();
@@ -297,9 +354,6 @@ extern "C" int WinMainCRTStartup() {
     const BOOL pixel_format_set = SetPixelFormat(window_device_context, pixel_format, &pixel_format_descriptor);
     DEBUG_ASSERT(pixel_format_set != FALSE);
 
-    const BOOL window_was_visible = ShowWindow(window, SW_SHOW);
-    DEBUG_ASSERT(window_was_visible == FALSE);
-
     const HGLRC render_context = wglCreateContext(window_device_context);
     DEBUG_ASSERT(render_context != NULL);
 
@@ -320,6 +374,11 @@ extern "C" int WinMainCRTStartup() {
     platform.query_performance_frequency = query_performance_frequency;
     platform.query_performance_counter = query_performance_counter;
     platform.load_resource = load_resource;
+    platform.open_file = open_file;
+    platform.get_file_size = get_file_size;
+    platform.read_file_into_buffer = read_file_into_buffer;
+    platform.write_buffer_into_file = write_buffer_into_file;
+    platform.close_file = close_file;
 
     platform.glViewport = glViewport;
     platform.glGenTextures = glGenTextures;
@@ -386,10 +445,15 @@ extern "C" int WinMainCRTStartup() {
     platform.glActiveTexture = glActiveTexture;
 
     GameMemory game_memory = {};
-    game_memory.permanent_storage = VirtualAlloc(0, game_memory.permanent_storage_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    game_memory.permanent_storage = VirtualAlloc(0, game_memory.PERMANENT_STORAGE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
+    game_memory.transient_storage = VirtualAlloc(0, game_memory.TRANSIENT_STORAGE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    DEBUG_ASSERT(game_memory.transient_storage != nullptr);
 
     game_code.initialise_proc(game_memory, client_width, client_height, platform);
+
+    const BOOL window_was_visible = ShowWindow(window, SW_SHOW);
+    DEBUG_ASSERT(window_was_visible == FALSE);
 
     bool quit = false;
     while (!quit) {
@@ -424,5 +488,5 @@ extern "C" int WinMainCRTStartup() {
         }
     }
 
-    return 0;
+    ExitProcess(0);
 }

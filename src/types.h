@@ -1,6 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+using i8 = char;
 using u8 = unsigned char;
 using u16 = unsigned short;
 using i32 = int;

@@ -2,93 +2,6 @@
 #include "types.h"
 #include "util.h"
 
-// static std::array<char, 56> writeGameStateToBuffer(const int difficultyLevel,
-//     const int rowsCleared, const Tetris::Tetrimino::Type nextTetriminoType,
-//     const Tetris::Tetrimino& currentTetrimino, const Tetris::Grid& grid,
-//     const InputHistory& inputHistory)
-// {
-//     std::array<char, 56> buffer{};
-//     std::copy_n(reinterpret_cast<const char*>(&difficultyLevel), 4, buffer.begin());
-//     std::copy_n(reinterpret_cast<const char*>(&rowsCleared), 4, buffer.begin() + 4);
-//     buffer[8] = static_cast<char>(nextTetriminoType);
-//     buffer[9] = static_cast<char>(currentTetrimino.type());
-
-//     constexpr auto encodeAsInt16 = [](const Position<int> position) {
-//         return static_cast<std::int16_t>((position.x << 8) + position.y);
-//     };
-
-//     const Tetris::Tetrimino::Blocks& tetriminoBlocks = currentTetrimino.blocks;
-//     for (auto [blockPosition, offset] = std::make_pair(tetriminoBlocks.begin(), 10);
-//         blockPosition != tetriminoBlocks.end(); ++blockPosition, offset += 2)
-//     {
-//         const std::int16_t position = encodeAsInt16(*blockPosition);
-//         std::copy_n(reinterpret_cast<const char*>(&position), 2, buffer.begin() + offset);
-//     }
-
-//     for (int row = 0, offset = 18; row < Tetris::Grid::ROW_COUNT; ++row, offset += 2)
-//     {
-//         int rowState = 0;
-//         for (int column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column)
-//             rowState |= (grid[row][column].has_value() << column);
-
-//         std::copy_n(reinterpret_cast<const char*>(&rowState), 2, buffer.begin() + offset);
-//     }
-
-//     // This could be saved in a byte but saving it in 2 makes
-//     // the whole game state a multiple of 8 bytes in the file
-//     int playerInputState = 0;
-//     playerInputState |= (inputHistory.down.currentState != KeyState::Released);
-//     playerInputState |= ((inputHistory.left.currentState != KeyState::Released) << 1);
-//     playerInputState |= ((inputHistory.right.currentState != KeyState::Released) << 2);
-//     playerInputState |= ((inputHistory.clockwise.currentState != KeyState::Released) << 3);
-//     playerInputState |= ((inputHistory.antiClockwise.currentState != KeyState::Released) << 4);
-//     std::copy_n(reinterpret_cast<const char*>(&playerInputState), 2, buffer.begin() + 54);
-
-//     return buffer;
-// }
-
-// static std::array<double, 188> toNeuralNetworkInputs(const int difficultyLevel,
-//     const int rowsCleared, const Tetris::Tetrimino::Type nextTetriminoType,
-//     const Tetris::Tetrimino & currentTetrimino, const Tetris::Grid & grid,
-//     const InputHistory & inputHistory)
-// {
-//     std::array<double, 188> inputs{};
-//     inputs[0] = static_cast<double>(difficultyLevel);
-//     inputs[1] = static_cast<double>(rowsCleared);
-//     inputs[2] = static_cast<double>(nextTetriminoType);
-//     inputs[3] = static_cast<double>(currentTetrimino.type());
-
-//     const Tetris::Tetrimino::Blocks& tetriminoBlocks = currentTetrimino.blocks;
-//     for (auto [index, blockPosition] = std::make_pair(4, tetriminoBlocks.begin());
-//         blockPosition != tetriminoBlocks.end(); index += 2, ++blockPosition)
-//     {
-//         inputs[index] = static_cast<double>(blockPosition->x);
-//         inputs[index + 1] = static_cast<double>(blockPosition->y);
-//     }
-
-//     for (int row = 0, index = 12; row < Tetris::Grid::ROW_COUNT; ++row)
-//         for (int column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column, ++index)
-//             inputs[index] = static_cast<double>(grid[row][column].has_value());
-
-//     return inputs;
-// }
-
-// static constexpr PlayerInput toPlayerInput(const std::array<double, 5>& neuralNetworkOutput) noexcept
-// {
-//     constexpr auto toKeyState = [](const double d) noexcept {
-//         return (d == 0.0) ? KeyState::Released : KeyState::Pressed;
-//     };
-
-//     PlayerInput translatedInput{};
-//     translatedInput.down = toKeyState(neuralNetworkOutput[0]);
-//     translatedInput.left = toKeyState(neuralNetworkOutput[1]);
-//     translatedInput.right = toKeyState(neuralNetworkOutput[2]);
-//     translatedInput.clockwise = toKeyState(neuralNetworkOutput[3]);
-//     translatedInput.antiClockwise = toKeyState(neuralNetworkOutput[4]);
-
-//     return translatedInput;
-// }
-
 namespace Tetris {
     Colour piece_colour(const Tetrimino::Type type) {
         static constexpr Colour COLOURS[Tetrimino::Type::COUNT] = {
@@ -154,6 +67,12 @@ namespace Tetris {
         return Vec2{point.y + reference_point.x - reference_point.y, -point.x + reference_point.x + reference_point.y};
     }
 
+    static i32 floor(const f32 x) {
+        const bool is_signed = x < 0.0f;
+        const i32 x_truncated = static_cast<i32>(x);
+        return is_signed ? x_truncated - 1 : x_truncated;
+    }
+
     Tetrimino rotate(Tetrimino tetrimino, const Rotation rotation) {
         using RotationFunction = Vec2(*)(const Vec2&, const Vec2&);
         static constexpr RotationFunction rotation_functions[2] = {
@@ -166,8 +85,8 @@ namespace Tetris {
             const Vec2 block_centre = Vec2{static_cast<f32>(block_top_left.x) + 0.5f, static_cast<f32>(block_top_left.y) + 0.5f};    
             const Vec2 rotated_block_centre = rotate(block_centre, tetrimino.centre);
 
-            block_top_left.x = static_cast<i32>(rotated_block_centre.x);
-            block_top_left.y = static_cast<i32>(rotated_block_centre.y);
+            block_top_left.x = floor(rotated_block_centre.x);
+            block_top_left.y = floor(rotated_block_centre.y);
         }
 
         return tetrimino;

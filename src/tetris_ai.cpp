@@ -11,6 +11,9 @@
 #include "maths.cpp"
 #include "util.cpp"
 
+#include "neural_network.h"
+#include "neural_network.cpp"
+
 #define DEBUG_ASSERT(condition) if (!(condition)) platform.show_error_box("Debug Assert", #condition)
 
 struct GameState {
@@ -30,6 +33,12 @@ struct GameState {
     u32 updates_clockwise_held_count;
     u32 updates_anti_clockwise_held_count;
 
+    bool down_was_pressed;
+    bool left_was_pressed;
+    bool right_was_pressed;
+    bool clockwise_was_pressed;
+    bool anti_clockwise_was_pressed;
+    
     GLuint vertex_buffer_object;
     GLuint index_buffer_object;
     GLuint shader_program;
@@ -42,9 +51,178 @@ struct GameState {
     f32 accumulated_time;
 
     u32 rng_seed;
+
+    NeuralNetwork neural_network;
+    File training_data_file;
 };
 
-static_assert(sizeof(GameState) < GameMemory::permanent_storage_size);
+static_assert(sizeof(GameState) < GameMemory::PERMANENT_STORAGE_SIZE);
+
+static i32 calculate_difficulty_level(const i32 total_rows_cleared) {
+    return total_rows_cleared / 10 + 1;
+}
+
+static void game_state_to_neural_network_input(const GameState& game_state, NeuralNetwork::InputLayer& input) {
+    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+    input[0] = static_cast<f32>(difficulty_level);
+    input[1] = static_cast<f32>(game_state.total_rows_cleared);
+    input[2] = static_cast<f32>(game_state.next_tetrimino.type);
+    input[3] = static_cast<f32>(game_state.tetrimino.type);
+
+    for (i32 i = 0; i < 4; ++i) {
+        input[4 + i + 0] = static_cast<f32>(game_state.tetrimino.blocks.top_left_coordinates[i].x);
+        input[4 + i + 1] = static_cast<f32>(game_state.tetrimino.blocks.top_left_coordinates[i].y);
+    }
+
+    i32 i = 12;
+    for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
+        for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
+            const bool cell_has_block = !Tetris::is_empty_cell(game_state.grid.cells[row][column]);
+            input[i++] = static_cast<f32>(cell_has_block);
+        }
+    }
+}
+
+static constexpr u8 BINARY_GAME_STATE_SIZE = 54;
+using BinaryGameState = i8[BINARY_GAME_STATE_SIZE];
+using BinaryPlayerInput = u16;
+
+static u32 game_state_to_binary_game_state(const GameState& game_state, BinaryGameState& binary_game_state) {
+    u32 bytes_written = 0;
+    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+    bytes_written += copy_bytes(reinterpret_cast<const i8*>(&difficulty_level), sizeof(difficulty_level), binary_game_state + bytes_written);
+    bytes_written += copy_bytes(reinterpret_cast<const i8*>(&game_state.total_rows_cleared), sizeof(game_state.total_rows_cleared), binary_game_state + bytes_written);
+
+    const i8 next_tetrimino_type = static_cast<i8>(game_state.next_tetrimino.type);
+    binary_game_state[bytes_written++] = next_tetrimino_type;
+
+    const i8 tetrimino_type = static_cast<i8>(game_state.tetrimino.type);
+    binary_game_state[bytes_written++] = tetrimino_type;
+
+    const Tetris::Tetrimino::Blocks& tetrimino_blocks = game_state.tetrimino.blocks;
+    for (i32 block_index = 0; block_index < 4; ++block_index) {
+        const i8 block_top_left_x = static_cast<i8>(tetrimino_blocks.top_left_coordinates[block_index].x);
+        binary_game_state[bytes_written++] = block_top_left_x;
+        const i8 block_top_left_y = static_cast<i8>(tetrimino_blocks.top_left_coordinates[block_index].y);
+        binary_game_state[bytes_written++] = block_top_left_y;
+    }
+
+    for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
+        u16 binary_row_state = 0;
+        for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
+            const bool cell_has_block = !Tetris::is_empty_cell(game_state.grid.cells[row][column]);
+            binary_row_state |= (static_cast<u16>(cell_has_block) << column);
+        }
+
+        bytes_written += copy_bytes(reinterpret_cast<const i8*>(&binary_row_state), sizeof(binary_row_state), binary_game_state + bytes_written);
+    }
+
+    return bytes_written;
+}
+
+// TODO: assert bytes_read is as expected at various points throughout
+static void binary_game_state_to_neural_network_input(const BinaryGameState& binary_game_state, NeuralNetwork::InputLayer& input) {
+    u32 bytes_read = 0;
+
+    i32 difficulty_level = 0;
+    bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(difficulty_level), reinterpret_cast<i8*>(&difficulty_level));
+    input[0] = static_cast<f32>(difficulty_level);
+
+    i32 rows_cleared = 0;
+    bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(rows_cleared), reinterpret_cast<i8*>(&rows_cleared));
+    input[1] = static_cast<f32>(rows_cleared);
+    
+    const i8 next_tetrimino_type = binary_game_state[bytes_read++];
+    input[2] = static_cast<f32>(next_tetrimino_type);
+
+    const i8 current_tetrimino_type = binary_game_state[bytes_read++];
+    input[3] = static_cast<f32>(current_tetrimino_type);
+
+    // read current tetrimino block positions
+    for (i32 input_index = 4; input_index < 12; input_index += 2) {
+        const i8 block_top_left_x = binary_game_state[bytes_read++];
+        input[input_index] = static_cast<f32>(block_top_left_x);
+        const i8 block_top_left_y = binary_game_state[bytes_read++];
+        input[input_index + 1] = static_cast<f32>(block_top_left_y);
+    }
+
+    // read grid state
+    i32 input_index = 12;
+    for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
+        u16 encoded_row = 0;
+        bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(encoded_row), reinterpret_cast<i8*>(&encoded_row));
+        for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
+            const bool cell_has_block = (encoded_row & (1 << column)) != 0;
+            input[input_index++] = static_cast<f32>(cell_has_block);
+        }
+    }
+}
+
+static BinaryPlayerInput player_input_to_binary_player_input(const PlayerInput& player_input) {
+    BinaryPlayerInput binary_player_input = 0;
+
+    binary_player_input |= static_cast<BinaryPlayerInput>(player_input.down);
+    binary_player_input |= (static_cast<BinaryPlayerInput>(player_input.left) << 1);
+    binary_player_input |= (static_cast<BinaryPlayerInput>(player_input.right) << 2);
+    binary_player_input |= (static_cast<BinaryPlayerInput>(player_input.clockwise) << 3);
+    binary_player_input |= (static_cast<BinaryPlayerInput>(player_input.anti_clockwise) << 4);
+
+    return binary_player_input;
+}
+
+static void binary_player_input_to_neural_network_output(const BinaryPlayerInput encoded_outputs, NeuralNetwork::OutputLayer& output) {
+    for (i32 i = 0; i < NeuralNetwork::OUTPUT_LAYER_SIZE; ++i) {
+        const bool val = (encoded_outputs & (1 << i)) != 0;
+        output[i] = static_cast<f32>(val);
+    }
+}
+
+// TODO: should be averaging over batches
+static void train(NeuralNetwork& neural_network, const i8* training_data, const u32 training_data_size) {
+    // TODO: assert training data size is multiple of binary game state + player input
+
+    NeuralNetwork neural_network_delta = {};
+
+    u32 bytes_read = 0;
+    while (bytes_read < training_data_size) {
+        BinaryGameState binary_game_state = {};
+        bytes_read += copy_bytes(training_data + bytes_read, sizeof(binary_game_state), reinterpret_cast<i8*>(binary_game_state));
+
+        BinaryPlayerInput encoded_player_input = 0;
+        bytes_read += copy_bytes(training_data + bytes_read, sizeof(encoded_player_input), reinterpret_cast<i8*>(&encoded_player_input));
+
+        NeuralNetwork::InputLayer game_state = {};
+        binary_game_state_to_neural_network_input(binary_game_state, game_state);
+
+        NeuralNetwork::OutputLayer player_input = {};
+        binary_player_input_to_neural_network_output(encoded_player_input, player_input);
+
+        back_propagate(neural_network, game_state, player_input, neural_network_delta);
+    }
+
+    static constexpr f32 LEARNING_RATE = 0.1f;
+    const f32 batch_size = static_cast<f32>(training_data_size / (BINARY_GAME_STATE_SIZE + 2));
+
+    for (i32 row = 0; row < NeuralNetwork::HIDDEN_LAYER_SIZE; ++row) {
+        for (i32 column = 0; column < NeuralNetwork::INPUT_LAYER_SIZE; ++column) {
+            neural_network.input_to_hidden_weights[row][column] -= LEARNING_RATE * (neural_network_delta.input_to_hidden_weights[row][column]) / batch_size;
+        }
+    }
+
+    for (i32 i = 0; i < NeuralNetwork::HIDDEN_LAYER_SIZE; ++i) {
+        neural_network.hidden_biases[i] -= LEARNING_RATE * neural_network_delta.hidden_biases[i] / batch_size;
+    }
+
+    for (i32 row = 0; row < NeuralNetwork::OUTPUT_LAYER_SIZE; ++row) {
+        for (i32 column = 0; column < NeuralNetwork::HIDDEN_LAYER_SIZE; ++column) {
+            neural_network.hidden_to_output_weights[row][column] -= LEARNING_RATE * (neural_network_delta.hidden_to_output_weights[row][column]) / batch_size;
+        }
+    }
+
+    for (i32 i = 0; i < NeuralNetwork::OUTPUT_LAYER_SIZE; ++i) {
+        neural_network.output_biases[i] -= LEARNING_RATE * neural_network_delta.output_biases[i] / batch_size;
+    }
+}
 
 static constexpr Coordinates TETRIMINO_SPAWN_LOCATION = Coordinates{4, 0};
 
@@ -87,14 +265,14 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
 
     const GLuint vertex_shader = platform.glCreateShader(GL_VERTEX_SHADER);
     const Resource vertex_shader_source = platform.load_resource(ID_VERTEX_SHADER);
-    const char* vertex_shader_source_text = static_cast<const char*>(vertex_shader_source.data);
+    const GLchar* vertex_shader_source_text = static_cast<const GLchar*>(vertex_shader_source.data);
     const i32 vertex_shader_source_size = static_cast<i32>(vertex_shader_source.size);
     platform.glShaderSource(vertex_shader, 1, &vertex_shader_source_text, &vertex_shader_source_size);
     platform.glCompileShader(vertex_shader);
 
     const GLuint fragment_shader = platform.glCreateShader(GL_FRAGMENT_SHADER);
     const Resource fragment_shader_source = platform.load_resource(ID_FRAGMENT_SHADER);
-    const char* fragment_shader_source_text = static_cast<const char*>(fragment_shader_source.data);
+    const GLchar* fragment_shader_source_text = static_cast<const GLchar*>(fragment_shader_source.data);
     const i32 fragment_shader_source_size = static_cast<i32>(fragment_shader_source.size);
     platform.glShaderSource(fragment_shader, 1, &fragment_shader_source_text, &fragment_shader_source_size);
     platform.glCompileShader(fragment_shader);
@@ -163,6 +341,60 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
     game_state.updates_right_held_count = 0;
     game_state.updates_clockwise_held_count = 0;
     game_state.updates_anti_clockwise_held_count = 0;
+
+    game_state.down_was_pressed = false;
+    game_state.left_was_pressed = false;
+    game_state.right_was_pressed = false;
+    game_state.clockwise_was_pressed = false;
+    game_state.anti_clockwise_was_pressed = false;
+
+    static constexpr const i8* NEURAL_NETWORK_FILE_NAME = "neural_network.bin";
+    static constexpr const i8* TRAINING_DATA_FILE_NAME = "training_data.bin";
+
+    File neural_network_file = {};
+    if (platform.open_file(NEURAL_NETWORK_FILE_NAME, FileAccessFlags::READ, FileCreationFlags::USE_EXISTING, neural_network_file)) {
+        const u32 neural_network_file_size = platform.get_file_size(neural_network_file);
+
+        const u32 bytes_read_from_file = platform.read_file_into_buffer(neural_network_file, game_memory.transient_storage, neural_network_file_size);
+        DEBUG_ASSERT(bytes_read_from_file == neural_network_file_size);
+
+        const u32 bytes_read = load_from_buffer(game_state.neural_network, reinterpret_cast<const i8*>(game_memory.transient_storage), static_cast<u32>(game_memory.TRANSIENT_STORAGE_SIZE));
+        DEBUG_ASSERT(bytes_read == neural_network_file_size);
+
+        platform.close_file(neural_network_file);
+    } else {
+        game_state.neural_network = random_neural_network(game_state.rng_seed);
+    }
+
+    // TODO: can only read as much into memory as transient storage allows, make sure we read file in chunks if file size > transient storage
+    game_state.training_data_file = {};
+    if (platform.open_file(TRAINING_DATA_FILE_NAME, FileAccessFlags::READ, FileCreationFlags::USE_EXISTING, game_state.training_data_file)) {
+        const u32 training_data_file_size = platform.get_file_size(game_state.training_data_file);
+
+        const u32 bytes_read_from_file = platform.read_file_into_buffer(game_state.training_data_file, game_memory.transient_storage, training_data_file_size);
+        DEBUG_ASSERT(bytes_read_from_file == training_data_file_size);
+
+        for (i32 i = 0; i < 100; ++i) {
+            train(game_state.neural_network, reinterpret_cast<const i8*>(game_memory.transient_storage), training_data_file_size);
+        }
+
+        platform.close_file(game_state.training_data_file);
+    }
+
+    if (platform.open_file(NEURAL_NETWORK_FILE_NAME, FileAccessFlags::WRITE, FileCreationFlags::ALWAYS_CREATE, neural_network_file)) {
+        const u32 bytes_written = save_to_buffer(game_state.neural_network, reinterpret_cast<i8*>(game_memory.transient_storage));
+        DEBUG_ASSERT(bytes_written < game_memory.TRANSIENT_STORAGE_SIZE);
+        
+        const u32 bytes_written_to_file = platform.write_buffer_into_file(neural_network_file, game_memory.transient_storage, bytes_written);
+        DEBUG_ASSERT(bytes_written_to_file == bytes_written);
+
+        platform.close_file(neural_network_file);
+    }
+
+    const bool file_opened = platform.open_file(TRAINING_DATA_FILE_NAME, FileAccessFlags::WRITE, FileCreationFlags::ALWAYS_OPEN, game_state.training_data_file);
+    DEBUG_ASSERT(file_opened);
+
+    game_state.previous_tick_count = platform.query_performance_counter();
 }
 
 static u32 update_held_count(const bool pressed, const bool previously_pressed, const u32 updates_held_count) {
@@ -172,28 +404,70 @@ static u32 update_held_count(const bool pressed, const bool previously_pressed, 
 static bool is_actionable_input(const bool pressed, const bool previously_pressed, const u32 updates_in_held_state) {
     static constexpr i32 DELAY = 3;
 
-    const bool just_pressed = pressed && !previously_pressed;
     const bool held = pressed && previously_pressed;
-    const bool act_on_held = held && (updates_in_held_state > 30) && (updates_in_held_state % DELAY) == 0;
-
-    return just_pressed || act_on_held;
+    return held && (updates_in_held_state > 30) && (updates_in_held_state % DELAY) == 0;
 }
 
-static i32 calculate_difficulty_level(const i32 total_rows_cleared) {
-    return total_rows_cleared / 10 + 1;
-}
-
-extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& player_input, const Platform& platform) {
+extern "C" void update_game(const GameMemory& game_memory, const PlayerInput&, const Platform& platform) {
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
 
     const i64 tick_count = platform.query_performance_counter();
-    const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<float>(game_state.tick_frequency) * 1000.0f;
+    const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<f32>(game_state.tick_frequency) * 1000.0f;
     game_state.accumulated_time += frame_duration;
     game_state.previous_tick_count = tick_count;
 
+    NeuralNetwork::InputLayer nn_input = {};
+    game_state_to_neural_network_input(game_state, nn_input);
+
+    NeuralNetwork::OutputLayer ai_input = {};
+    feed_forward(game_state.neural_network, nn_input, ai_input);
+
+    static constexpr f32 AI_THRESHOLD = 0.75f;
+
+    PlayerInput player_input = {};
+    player_input.down = ai_input[0] > AI_THRESHOLD;
+    player_input.left = ai_input[1] > AI_THRESHOLD;
+    player_input.right = ai_input[2] > AI_THRESHOLD;
+    player_input.clockwise = ai_input[3] > AI_THRESHOLD;
+    player_input.anti_clockwise = ai_input[4] > AI_THRESHOLD;
+
+    if (!game_state.down_was_pressed && player_input.down && !game_state.previous_player_input.down) {
+        game_state.down_was_pressed = true;
+    }
+
+    if (!game_state.left_was_pressed && player_input.left && !game_state.previous_player_input.left) {
+        game_state.left_was_pressed = true;
+    }
+    
+    if (!game_state.right_was_pressed && player_input.right && !game_state.previous_player_input.right) {
+        game_state.right_was_pressed = true;
+    }
+    
+    if (!game_state.clockwise_was_pressed && player_input.clockwise && !game_state.previous_player_input.clockwise) {
+        game_state.clockwise_was_pressed = true;
+    }
+    
+    if (!game_state.anti_clockwise_was_pressed && player_input.anti_clockwise && !game_state.previous_player_input.anti_clockwise) {
+        game_state.anti_clockwise_was_pressed = true;
+    }
+
     static constexpr f32 DELTA_TIME = 1000.0f / 60.0f;
     while (game_state.accumulated_time >= DELTA_TIME) {
+        // dump game state for training data
+        BinaryGameState binary_game_state = {};
+        const u32 bytes_written = game_state_to_binary_game_state(game_state, binary_game_state);
+        DEBUG_ASSERT(bytes_written == sizeof(binary_game_state));
+
+        const BinaryPlayerInput binary_player_input = player_input_to_binary_player_input(player_input);
+
+        u32 bytes_written_to_file = 0;
+        bytes_written_to_file += platform.write_buffer_into_file(game_state.training_data_file, binary_game_state, sizeof(binary_game_state));
+        DEBUG_ASSERT(bytes_written_to_file == sizeof(binary_game_state));
+
+        bytes_written_to_file += platform.write_buffer_into_file(game_state.training_data_file, &binary_player_input, sizeof(binary_player_input));
+        DEBUG_ASSERT(bytes_written_to_file == sizeof(binary_game_state) + sizeof(binary_player_input));
+
         const PlayerInput& previous_player_input = game_state.previous_player_input;
 
         game_state.updates_down_held_count = update_held_count(player_input.down, previous_player_input.down, game_state.updates_down_held_count);
@@ -202,7 +476,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
         game_state.updates_clockwise_held_count = update_held_count(player_input.clockwise, previous_player_input.clockwise, game_state.updates_clockwise_held_count);
         game_state.updates_anti_clockwise_held_count = update_held_count(player_input.anti_clockwise, previous_player_input.anti_clockwise, game_state.updates_anti_clockwise_held_count);
 
-        const bool should_move_tetrimino_left = is_actionable_input(player_input.left, previous_player_input.left, game_state.updates_left_held_count);
+        const bool should_move_tetrimino_left = game_state.left_was_pressed || is_actionable_input(player_input.left, previous_player_input.left, game_state.updates_left_held_count);
         if (should_move_tetrimino_left) {
             game_state.tetrimino = shift(game_state.tetrimino, Coordinates{-1, 0});
             if (collision(game_state.tetrimino, game_state.grid)) {
@@ -210,7 +484,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
             }
         }
 
-        const bool should_move_tetrimino_right = is_actionable_input(player_input.right, previous_player_input.right, game_state.updates_right_held_count);
+        const bool should_move_tetrimino_right = game_state.right_was_pressed || is_actionable_input(player_input.right, previous_player_input.right, game_state.updates_right_held_count);
         if (should_move_tetrimino_right) {
             game_state.tetrimino = shift(game_state.tetrimino, Coordinates{1, 0});
             if (collision(game_state.tetrimino, game_state.grid)) {
@@ -224,7 +498,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
         const i32 updates_allowed_before_drop = (updates_allowed < 10) ? 10 : updates_allowed;
 
         bool should_merge_tetrimino_with_grid = false;
-        const bool should_move_tetrimino_down = is_actionable_input(player_input.down, previous_player_input.down, game_state.updates_down_held_count) || game_state.updates_since_last_drop >= updates_allowed_before_drop;
+        const bool should_move_tetrimino_down = game_state.down_was_pressed || is_actionable_input(player_input.down, previous_player_input.down, game_state.updates_down_held_count) || game_state.updates_since_last_drop >= updates_allowed_before_drop;
         if (should_move_tetrimino_down) {
             game_state.tetrimino = shift(game_state.tetrimino, Coordinates{0, 1});
             if (collision(game_state.tetrimino, game_state.grid)) {   // Then we need to merge tetrimino to grid and spawn another
@@ -237,7 +511,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
 
         // TODO: should this go before attempting to drop tetrimino down/left/right?
         if (!should_merge_tetrimino_with_grid) {
-            const bool should_rotate_tetrimino_clockwise = is_actionable_input(player_input.clockwise, previous_player_input.clockwise, game_state.updates_clockwise_held_count);
+            const bool should_rotate_tetrimino_clockwise = game_state.clockwise_was_pressed || is_actionable_input(player_input.clockwise, previous_player_input.clockwise, game_state.updates_clockwise_held_count);
             if (should_rotate_tetrimino_clockwise) {
                 game_state.tetrimino = rotate(game_state.tetrimino, Tetris::Rotation::CLOCKWISE);
                 if (collision(game_state.tetrimino, game_state.grid) && !resolve_rotation_collision(game_state.tetrimino, game_state.grid)) {
@@ -245,7 +519,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
                 }
             }
 
-            const bool should_rotate_tetrimino_anti_clockwise = is_actionable_input(player_input.anti_clockwise, previous_player_input.anti_clockwise, game_state.updates_anti_clockwise_held_count);
+            const bool should_rotate_tetrimino_anti_clockwise = game_state.anti_clockwise_was_pressed || is_actionable_input(player_input.anti_clockwise, previous_player_input.anti_clockwise, game_state.updates_anti_clockwise_held_count);
             if (should_rotate_tetrimino_anti_clockwise) {
                 game_state.tetrimino = rotate(game_state.tetrimino, Tetris::Rotation::ANTI_CLOCKWISE);
                 if (collision(game_state.tetrimino, game_state.grid) && !resolve_rotation_collision(game_state.tetrimino, game_state.grid)) {
@@ -271,6 +545,12 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
         const i32 rows_cleared = remove_completed_rows(game_state.grid);
         game_state.total_rows_cleared += rows_cleared;
         game_state.player_score += rows_cleared * 100 * difficulty_level;
+
+        game_state.down_was_pressed = false;
+        game_state.left_was_pressed = false;
+        game_state.right_was_pressed = false;
+        game_state.clockwise_was_pressed = false;
+        game_state.anti_clockwise_was_pressed = false;
 
         ++game_state.updates_since_last_drop;
         game_state.accumulated_time -= DELTA_TIME;
@@ -316,6 +596,27 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     render_integer(scene, difficulty_level, 16.0f, 5.0f);
 
     render_text(scene, "NEXT", 13.0f, 10.0f);
+
+    const PlayerInput& player_input = game_state.previous_player_input;
+    if (player_input.left) {
+        render_character(scene, '\x11', 0.0f, 0.0f);
+    }
+
+    if (player_input.down) {
+        render_character(scene, '\x1F', 1.0f, 0.0f);
+    }
+    
+    if (player_input.right) {
+        render_character(scene, '\x10', 2.0f, 0.0f);
+    }
+
+    if (player_input.clockwise) {
+        render_character(scene, '\x1A', 3.0f, 0.0f);
+    }
+
+    if (player_input.anti_clockwise) {
+        render_character(scene, '\x1B', 4.0f, 0.0f);
+    }
 
     platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.vertex_buffer_object);
     platform.glBufferData(GL_ARRAY_BUFFER, sizeof(scene.vertices), reinterpret_cast<const void*>(scene.vertices), GL_STATIC_DRAW);

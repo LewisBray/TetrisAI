@@ -37,7 +37,7 @@ static constexpr u32 FONT_SET_HEIGHT_PIXELS = FONT_SET_HEIGHT * FONT_HEIGHT_PIXE
 static constexpr f32 FONT_WIDTH_NORMALISED = static_cast<f32>(FONT_WIDTH_PIXELS) / static_cast<f32>(FONT_SET_WIDTH_PIXELS);
 static constexpr f32 FONT_HEIGHT_NORMALISED = static_cast<f32>(FONT_HEIGHT_PIXELS) / static_cast<f32>(FONT_SET_HEIGHT_PIXELS);
 
-static Vec2 texture_coordinates(const char c) {
+static Vec2 texture_coordinates(const i8 c) {
     const u32 x = static_cast<u32>(c) % FONT_SET_WIDTH;
     const u32 y = FONT_SET_HEIGHT - static_cast<u32>(c) / FONT_SET_WIDTH;
     const f32 x_normalised = FONT_WIDTH_NORMALISED * static_cast<f32>(x);
@@ -46,7 +46,7 @@ static Vec2 texture_coordinates(const char c) {
     return Vec2{x_normalised, y_normalised};
 }
 
-static void render_character(Scene& scene, const char c, const f32 x, const f32 y) {
+static void render_character(Scene& scene, const i8 c, const f32 x, const f32 y) {
     const Vec2 texture_top_left = texture_coordinates(c);
 
     scene.vertices[scene.vertex_index + 0].position.x = x + 0.0f;
@@ -76,7 +76,7 @@ static void render_character(Scene& scene, const char c, const f32 x, const f32 
     scene.vertex_index += 4;
 }
 
-static void render_text(Scene& scene, const char* text, f32 x, const f32 y) {
+static void render_text(Scene& scene, const i8* text, f32 x, const f32 y) {
     while (*text != '\0') {
         render_character(scene, *text, x, y);
         x += 1.0f;
@@ -87,7 +87,7 @@ static void render_text(Scene& scene, const char* text, f32 x, const f32 y) {
 // This renders right-to-left as it comes out the easiest/most convenient, be careful!
 static void render_integer(Scene& scene, i32 integer, f32 x, const f32 y) {
     static constexpr i32 MAX_INT_DIGITS = 10;   // max value held in 32-bits is O(10^9), i.e. 10 digits
-    char digits[MAX_INT_DIGITS] = {};
+    i8 digits[MAX_INT_DIGITS] = {};
     for (i32 i = 0; i < 10; ++i) {
         digits[i] = integer % 10;
         integer /= 10;
@@ -102,7 +102,7 @@ static void render_integer(Scene& scene, i32 integer, f32 x, const f32 y) {
     }
 
     for (i32 i = 0; i < digit_count; ++i) {
-        const char c = digits[i] + '0';
+        const i8 c = digits[i] + '0';
         render_character(scene, c, x, y);
         x -= 1.0f;
     }
