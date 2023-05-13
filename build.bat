@@ -17,4 +17,4 @@ clang src\crt.c src\dllmain_crt_win32.c %common_compiler_flags%
 clang src\tetris_ai_win32.cpp %common_compiler_flags% %clang_cpp_compiler_flags%
 clang src\crt.c %common_compiler_flags%
 %rc_tool_path%\rc.exe /fo resource.res src\resource.rc
-%vc_tools_path%\LINK tetris_ai_win32.o crt.o resource.res kernel32.lib user32.lib gdi32.lib opengl32.lib %common_linker_flags% /LIBPATH:%system_libs_path% /OUT:tetris_ai_win32.exe
+%vc_tools_path%\LINK tetris_ai_win32.o crt.o resource.res kernel32.lib user32.lib gdi32.lib opengl32.lib %common_linker_flags% /STACK:0x100000,0x100000 /LIBPATH:%system_libs_path% /OUT:tetris_ai_win32.exe
