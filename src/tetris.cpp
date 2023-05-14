@@ -20,7 +20,7 @@ namespace Tetris {
         return Vec2{static_cast<f32>(top_left.x) + top_left_offset.x, static_cast<f32>(top_left.y) + top_left_offset.y};
     }
 
-    Tetrimino::Blocks block_locations(const Tetrimino::Type type, const Coordinates& top_left) {
+    static Tetrimino::Blocks block_locations(const Tetrimino::Type type, const Coordinates& top_left) {
         static constexpr Coordinates TOP_LEFT_OFFSET_COORDINATES[Tetrimino::Type::COUNT][4] = {
             {Coordinates{1, 0}, Coordinates{0, 1}, Coordinates{1, 1}, Coordinates{2, 1}},
             {Coordinates{0, 0}, Coordinates{0, 1}, Coordinates{0, 2}, Coordinates{1, 2}},

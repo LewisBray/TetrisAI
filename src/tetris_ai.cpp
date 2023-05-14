@@ -16,7 +16,14 @@
 
 #define DEBUG_ASSERT(condition) if (!(condition)) platform.show_error_box("Debug Assert", #condition)
 
+enum class GameMode : i32 {
+    PLAYER_CONTROLLED = 0,
+    AI_CONTROLLED = 1
+};
+
 struct GameState {
+    GameMode game_mode;
+
     PlayerInput previous_player_input;
 
     Tetris::Grid grid;
@@ -225,10 +232,13 @@ static void train(NeuralNetwork& neural_network, const i8* training_data, const 
 }
 
 static constexpr Coordinates TETRIMINO_SPAWN_LOCATION = Coordinates{4, 0};
+static constexpr Coordinates NEXT_TETRIMINO_DISPLAY_LOCATION = Coordinates{15, 13};
 
 extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_width, const i32 client_height, const Platform& platform) {
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
+
+    game_state.game_mode = GameMode::AI_CONTROLLED;
 
     platform.glViewport(0, 0, client_width, client_height);
 
@@ -328,7 +338,7 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
 
     game_state.rng_seed = random_number(game_state.rng_seed);
     const Tetris::Tetrimino::Type initial_next_tetrimino_type = static_cast<Tetris::Tetrimino::Type>(game_state.rng_seed % Tetris::Tetrimino::Type::COUNT);
-    game_state.next_tetrimino = construct_tetrimino(initial_next_tetrimino_type, TETRIMINO_SPAWN_LOCATION);
+    game_state.next_tetrimino = construct_tetrimino(initial_next_tetrimino_type, NEXT_TETRIMINO_DISPLAY_LOCATION);
 
     game_state.player_score = 0;
     game_state.total_rows_cleared = 0;
@@ -408,29 +418,11 @@ static bool is_actionable_input(const bool pressed, const bool previously_presse
     return held && (updates_in_held_state > 30) && (updates_in_held_state % DELAY) == 0;
 }
 
-extern "C" void update_game(const GameMemory& game_memory, const PlayerInput&, const Platform& platform) {
-    DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
-    GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
-
+static void update_tetris_game(GameState& game_state, const PlayerInput& player_input, const Platform& platform) {
     const i64 tick_count = platform.query_performance_counter();
     const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<f32>(game_state.tick_frequency) * 1000.0f;
     game_state.accumulated_time += frame_duration;
     game_state.previous_tick_count = tick_count;
-
-    NeuralNetwork::InputLayer nn_input = {};
-    game_state_to_neural_network_input(game_state, nn_input);
-
-    NeuralNetwork::OutputLayer ai_input = {};
-    feed_forward(game_state.neural_network, nn_input, ai_input);
-
-    static constexpr f32 AI_THRESHOLD = 0.75f;
-
-    PlayerInput player_input = {};
-    player_input.down = ai_input[0] > AI_THRESHOLD;
-    player_input.left = ai_input[1] > AI_THRESHOLD;
-    player_input.right = ai_input[2] > AI_THRESHOLD;
-    player_input.clockwise = ai_input[3] > AI_THRESHOLD;
-    player_input.anti_clockwise = ai_input[4] > AI_THRESHOLD;
 
     if (!game_state.down_was_pressed && player_input.down && !game_state.previous_player_input.down) {
         game_state.down_was_pressed = true;
@@ -528,7 +520,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput&, c
             }
         } else {
             merge(game_state.tetrimino, game_state.grid);
-            game_state.tetrimino = game_state.next_tetrimino;
+            game_state.tetrimino = construct_tetrimino(game_state.next_tetrimino.type, TETRIMINO_SPAWN_LOCATION);
             if (collision(game_state.tetrimino, game_state.grid)) {
                 // game over, reset
                 game_state.player_score = 0;
@@ -539,7 +531,7 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput&, c
 
             game_state.rng_seed = random_number(game_state.rng_seed);
             const Tetris::Tetrimino::Type next_tetrimino_type = static_cast<Tetris::Tetrimino::Type>(game_state.rng_seed % Tetris::Tetrimino::Type::COUNT);
-            game_state.next_tetrimino = construct_tetrimino(next_tetrimino_type, TETRIMINO_SPAWN_LOCATION);
+            game_state.next_tetrimino = construct_tetrimino(next_tetrimino_type, NEXT_TETRIMINO_DISPLAY_LOCATION);
         }
 
         const i32 rows_cleared = remove_completed_rows(game_state.grid);
@@ -559,6 +551,85 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput&, c
     game_state.previous_player_input = player_input;
 }
 
+extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& player_input, const Platform& platform) {
+    DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
+    GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
+
+    switch (game_state.game_mode) {
+        case GameMode::PLAYER_CONTROLLED: {
+            update_tetris_game(game_state, player_input, platform);
+        } break;
+
+        case GameMode::AI_CONTROLLED: {
+            NeuralNetwork::InputLayer nn_input = {};
+            game_state_to_neural_network_input(game_state, nn_input);
+
+            NeuralNetwork::OutputLayer nn_output = {};
+            feed_forward(game_state.neural_network, nn_input, nn_output);
+
+            static constexpr f32 AI_INPUT_THRESHOLD = 0.75f;
+
+            PlayerInput ai_input = {};
+            ai_input.down = nn_output[0] > AI_INPUT_THRESHOLD;
+            ai_input.left = nn_output[1] > AI_INPUT_THRESHOLD;
+            ai_input.right = nn_output[2] > AI_INPUT_THRESHOLD;
+            ai_input.clockwise = nn_output[3] > AI_INPUT_THRESHOLD;
+            ai_input.anti_clockwise = nn_output[4] > AI_INPUT_THRESHOLD;
+
+            update_tetris_game(game_state, ai_input, platform);
+        } break;
+    }
+}
+
+static void render_grid(Scene& scene, const Tetris::Grid& grid) {
+    for (i32 y = 0; y < Tetris::Grid::ROW_COUNT; ++y) {
+        for (i32 x = 0; x < Tetris::Grid::COLUMN_COUNT; ++x) {
+            const Tetris::Grid::Cell& cell = grid.cells[static_cast<u64>(y)][static_cast<u64>(x)];
+            render_tetrimino_block(scene, static_cast<f32>(x), static_cast<f32>(y), cell);
+        }
+    }
+}
+
+static void render_tetrimino(Scene& scene, const Tetris::Tetrimino& tetrimino) {
+    const Colour tetrimino_colour = piece_colour(tetrimino.type);
+    for (i32 top_left_index = 0; top_left_index < 4; ++top_left_index) {
+        const Coordinates& block_top_left = tetrimino.blocks.top_left_coordinates[top_left_index];
+        render_tetrimino_block(scene, static_cast<f32>(block_top_left.x), static_cast<f32>(block_top_left.y), tetrimino_colour);
+    }
+}
+
+static void render_tetris_game(Scene& scene, const GameState& game_state) {
+    render_grid(scene, game_state.grid);
+    render_tetrimino(scene, game_state.tetrimino);
+    render_tetrimino(scene, game_state.next_tetrimino);
+
+    render_text(scene, "SCORE", 13.0f, 1.0f, WHITE);
+    render_integer(scene, game_state.player_score, 18.0f, 2.0f, WHITE);
+
+    render_text(scene, "LEVEL", 13.0f, 4.0f, WHITE);
+    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+    render_integer(scene, difficulty_level, 16.0f, 5.0f, WHITE);
+
+    render_text(scene, "NEXT", 13.0f, 10.0f, WHITE);
+}
+
+static void render_neural_network_output(Scene& scene, const NeuralNetwork::OutputLayer nn_output) {
+    const f32 left_confidence = clamp(nn_output[1], 0.0f, 1.0f);
+    render_character(scene, '\x11', 0.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, left_confidence});
+
+    const f32 down_confidence = clamp(nn_output[0], 0.0f, 1.0f);
+    render_character(scene, '\x1F', 1.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, down_confidence});
+
+    const f32 right_confidence = clamp(nn_output[2], 0.0f, 1.0f);
+    render_character(scene, '\x10', 2.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, right_confidence});
+
+    const f32 clockwise_confidence = clamp(nn_output[3], 0.0f, 1.0f);
+    render_character(scene, '\x1A', 3.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, clockwise_confidence});
+
+    const f32 anti_clockwise_confidence = clamp(nn_output[4], 0.0f, 1.0f);
+    render_character(scene, '\x1B', 4.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, anti_clockwise_confidence});
+}
+
 extern "C" void render_game(const GameMemory& game_memory, const Platform& platform) {
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     const GameState& game_state = *static_cast<const GameState*>(game_memory.permanent_storage);
@@ -567,55 +638,22 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     platform.glClear(GL_COLOR_BUFFER_BIT);
 
     Scene scene = {};
-    for (i32 y = 0; y < Tetris::Grid::ROW_COUNT; ++y) {
-        for (i32 x = 0; x < Tetris::Grid::COLUMN_COUNT; ++x) {
-            const Tetris::Grid::Cell& cell = game_state.grid.cells[static_cast<u64>(y)][static_cast<u64>(x)];
-            render_tetrimino_block(scene, static_cast<f32>(x), static_cast<f32>(y), cell);
-        }
-    }
+    switch (game_state.game_mode) {
+        case GameMode::PLAYER_CONTROLLED: {
+            render_tetris_game(scene, game_state);
+        } break;
 
-    const Colour tetrimino_colour = piece_colour(game_state.tetrimino.type);
-    for (i32 top_left_index = 0; top_left_index < 4; ++top_left_index) {
-        const Coordinates& block_top_left = game_state.tetrimino.blocks.top_left_coordinates[top_left_index];
-        render_tetrimino_block(scene, static_cast<f32>(block_top_left.x), static_cast<f32>(block_top_left.y), tetrimino_colour);
-    }
+        case GameMode::AI_CONTROLLED: {
+            render_tetris_game(scene, game_state);
 
-    static constexpr Coordinates NEXT_TETRIMINO_DISPLAY_LOCATION = {15, 13};
-    const Colour next_tetrimino_colour = piece_colour(game_state.next_tetrimino.type);
-    const Tetris::Tetrimino::Blocks next_tetrimino_display_blocks = Tetris::block_locations(game_state.next_tetrimino.type, NEXT_TETRIMINO_DISPLAY_LOCATION);
-    for (i32 top_left_index = 0; top_left_index < 4; ++top_left_index) {
-        const Coordinates& block_top_left = next_tetrimino_display_blocks.top_left_coordinates[top_left_index];
-        render_tetrimino_block(scene, static_cast<f32>(block_top_left.x), static_cast<f32>(block_top_left.y), next_tetrimino_colour);
-    }
+            NeuralNetwork::InputLayer nn_input = {};
+            game_state_to_neural_network_input(game_state, nn_input);
 
-    render_text(scene, "SCORE", 13.0f, 1.0f);
-    render_integer(scene, game_state.player_score, 18.0f, 2.0f);
+            NeuralNetwork::OutputLayer nn_output = {};
+            feed_forward(game_state.neural_network, nn_input, nn_output);
 
-    render_text(scene, "LEVEL", 13.0f, 4.0f);
-    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
-    render_integer(scene, difficulty_level, 16.0f, 5.0f);
-
-    render_text(scene, "NEXT", 13.0f, 10.0f);
-
-    const PlayerInput& player_input = game_state.previous_player_input;
-    if (player_input.left) {
-        render_character(scene, '\x11', 0.0f, 0.0f);
-    }
-
-    if (player_input.down) {
-        render_character(scene, '\x1F', 1.0f, 0.0f);
-    }
-    
-    if (player_input.right) {
-        render_character(scene, '\x10', 2.0f, 0.0f);
-    }
-
-    if (player_input.clockwise) {
-        render_character(scene, '\x1A', 3.0f, 0.0f);
-    }
-
-    if (player_input.anti_clockwise) {
-        render_character(scene, '\x1B', 4.0f, 0.0f);
+            render_neural_network_output(scene, nn_output);
+        } break;
     }
 
     platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.vertex_buffer_object);

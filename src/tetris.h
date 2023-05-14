@@ -21,7 +21,6 @@ namespace Tetris {
 
     enum Rotation { CLOCKWISE = 0, ANTI_CLOCKWISE = 1 };
     Colour piece_colour(Tetrimino::Type type);
-    Tetrimino::Blocks block_locations(Tetrimino::Type type, const Coordinates& top_left);
     Tetrimino construct_tetrimino(Tetrimino::Type type, const Coordinates& top_left);
     Tetrimino shift(Tetrimino tetrimino, const Coordinates& shift);
     Tetrimino rotate(Tetrimino tetrimino, Rotation rotation);
