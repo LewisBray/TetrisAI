@@ -394,6 +394,8 @@ extern "C" [[noreturn]] void WinMainCRTStartup() {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcast-function-type"
 
+    GET_OPENGL_PROC(glGenVertexArrays, decltype(platform.glGenVertexArrays))
+    GET_OPENGL_PROC(glBindVertexArray, decltype(platform.glBindVertexArray))
     GET_OPENGL_PROC(glGenBuffers, decltype(platform.glGenBuffers))
     GET_OPENGL_PROC(glBindBuffer, decltype(platform.glBindBuffer))
     GET_OPENGL_PROC(glEnableVertexAttribArray, decltype(platform.glEnableVertexAttribArray))
@@ -412,6 +414,8 @@ extern "C" [[noreturn]] void WinMainCRTStartup() {
 
 #pragma clang diagnostic pop
 
+    DEBUG_ASSERT(glGenVertexArrays != nullptr);
+    DEBUG_ASSERT(glBindVertexArray != nullptr);
     DEBUG_ASSERT(glGenBuffers != nullptr);
     DEBUG_ASSERT(glBindBuffer != nullptr);
     DEBUG_ASSERT(glEnableVertexAttribArray != nullptr);
@@ -428,6 +432,8 @@ extern "C" [[noreturn]] void WinMainCRTStartup() {
     DEBUG_ASSERT(glUniform1i != nullptr);
     DEBUG_ASSERT(glActiveTexture != nullptr);
 
+    platform.glGenVertexArrays = glGenVertexArrays;
+    platform.glBindVertexArray = glBindVertexArray;
     platform.glGenBuffers = glGenBuffers;
     platform.glBindBuffer = glBindBuffer;
     platform.glEnableVertexAttribArray = glEnableVertexAttribArray;

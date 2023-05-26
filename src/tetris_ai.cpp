@@ -46,8 +46,10 @@ struct GameState {
     bool clockwise_was_pressed;
     bool anti_clockwise_was_pressed;
     
+    GLuint vertex_array_object;
     GLuint vertex_buffer_object;
-    GLuint index_buffer_object;
+    GLuint ui_vertex_array_object;
+    GLuint ui_vertex_buffer_object;
     GLuint shader_program;
     GLint sampler_uniform_location;
     GLuint block_texture_id;
@@ -231,6 +233,7 @@ static void train(NeuralNetwork& neural_network, const i8* training_data, const 
     }
 }
 
+static constexpr u32 MAX_BUFFER_TILE_COUNT = 1024;
 static constexpr Coordinates TETRIMINO_SPAWN_LOCATION = Coordinates{4, 0};
 static constexpr Coordinates NEXT_TETRIMINO_DISPLAY_LOCATION = Coordinates{15, 13};
 
@@ -241,6 +244,28 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
     game_state.game_mode = GameMode::AI_CONTROLLED;
 
     platform.glViewport(0, 0, client_width, client_height);
+
+    GLuint index_buffer_object = 0;
+    platform.glGenBuffers(1, &index_buffer_object);
+    platform.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
+
+    u16 indices[6 * MAX_BUFFER_TILE_COUNT] = {};
+    for (u16 tile_index = 0; tile_index < MAX_BUFFER_TILE_COUNT; ++tile_index) {
+        indices[6 * tile_index + 0] = 4 * tile_index + 0;
+        indices[6 * tile_index + 1] = 4 * tile_index + 1;
+        indices[6 * tile_index + 2] = 4 * tile_index + 2;
+        indices[6 * tile_index + 3] = 4 * tile_index + 2;
+        indices[6 * tile_index + 4] = 4 * tile_index + 3;
+        indices[6 * tile_index + 5] = 4 * tile_index + 0;
+    }
+
+    platform.glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), static_cast<const void*>(indices), GL_STATIC_DRAW);
+
+    // TODO: destroy index buffer?
+
+    game_state.vertex_array_object = 0;
+    platform.glGenVertexArrays(1, &game_state.vertex_array_object);
+    platform.glBindVertexArray(game_state.vertex_array_object);
 
     game_state.vertex_buffer_object = 0;
     platform.glGenBuffers(1, &game_state.vertex_buffer_object);
@@ -255,23 +280,26 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
     platform.glEnableVertexAttribArray(2);
     platform.glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(2 * sizeof(Vec2)));
 
-    GLuint index_buffer_object = 0;
-    platform.glGenBuffers(1, &index_buffer_object);
     platform.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
 
-    u16 indices[6 * SCENE_TILE_COUNT] = {};
-    for (u16 tile_index = 0; tile_index < SCENE_TILE_COUNT; ++tile_index) {
-        indices[6 * tile_index + 0] = 4 * tile_index + 0;
-        indices[6 * tile_index + 1] = 4 * tile_index + 1;
-        indices[6 * tile_index + 2] = 4 * tile_index + 2;
-        indices[6 * tile_index + 3] = 4 * tile_index + 2;
-        indices[6 * tile_index + 4] = 4 * tile_index + 3;
-        indices[6 * tile_index + 5] = 4 * tile_index + 0;
-    }
+    game_state.ui_vertex_array_object = 0;
+    platform.glGenVertexArrays(1, &game_state.ui_vertex_array_object);
+    platform.glBindVertexArray(game_state.ui_vertex_array_object);
 
-    platform.glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), static_cast<const void*>(indices), GL_STATIC_DRAW);
+    game_state.ui_vertex_buffer_object = 0;
+    platform.glGenBuffers(1, &game_state.ui_vertex_buffer_object);
+    platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.ui_vertex_buffer_object);
 
-    // TODO: destroy index buffer?
+    platform.glEnableVertexAttribArray(0);
+    platform.glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(0));
+
+    platform.glEnableVertexAttribArray(1);
+    platform.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(sizeof(Vec2)));
+
+    platform.glEnableVertexAttribArray(2);
+    platform.glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(2 * sizeof(Vec2)));
+
+    platform.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_object);
 
     const GLuint vertex_shader = platform.glCreateShader(GL_VERTEX_SHADER);
     const Resource vertex_shader_source = platform.load_resource(ID_VERTEX_SHADER);
@@ -581,53 +609,55 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
     }
 }
 
-static void render_grid(Scene& scene, const Tetris::Grid& grid) {
+static void render_grid(Vertices& vertices, const Tetris::Grid& grid) {
     for (i32 y = 0; y < Tetris::Grid::ROW_COUNT; ++y) {
         for (i32 x = 0; x < Tetris::Grid::COLUMN_COUNT; ++x) {
             const Tetris::Grid::Cell& cell = grid.cells[static_cast<u64>(y)][static_cast<u64>(x)];
-            render_tetrimino_block(scene, static_cast<f32>(x), static_cast<f32>(y), cell);
+            render_tetrimino_block(vertices, static_cast<f32>(x), static_cast<f32>(y), cell);
         }
     }
 }
 
-static void render_tetrimino(Scene& scene, const Tetris::Tetrimino& tetrimino) {
+static void render_tetrimino(Vertices& vertices, const Tetris::Tetrimino& tetrimino) {
     const Colour tetrimino_colour = piece_colour(tetrimino.type);
     for (i32 top_left_index = 0; top_left_index < 4; ++top_left_index) {
         const Coordinates& block_top_left = tetrimino.blocks.top_left_coordinates[top_left_index];
-        render_tetrimino_block(scene, static_cast<f32>(block_top_left.x), static_cast<f32>(block_top_left.y), tetrimino_colour);
+        render_tetrimino_block(vertices, static_cast<f32>(block_top_left.x), static_cast<f32>(block_top_left.y), tetrimino_colour);
     }
 }
 
-static void render_tetris_game(Scene& scene, const GameState& game_state) {
-    render_grid(scene, game_state.grid);
-    render_tetrimino(scene, game_state.tetrimino);
-    render_tetrimino(scene, game_state.next_tetrimino);
-
-    render_text(scene, "SCORE", 13.0f, 1.0f, WHITE);
-    render_integer(scene, game_state.player_score, 18.0f, 2.0f, WHITE);
-
-    render_text(scene, "LEVEL", 13.0f, 4.0f, WHITE);
-    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
-    render_integer(scene, difficulty_level, 16.0f, 5.0f, WHITE);
-
-    render_text(scene, "NEXT", 13.0f, 10.0f, WHITE);
+static void render_tetris_game_blocks(Vertices& vertices, const GameState& game_state) {
+    render_grid(vertices, game_state.grid);
+    render_tetrimino(vertices, game_state.tetrimino);
+    render_tetrimino(vertices, game_state.next_tetrimino);
 }
 
-static void render_neural_network_output(Scene& scene, const NeuralNetwork::OutputLayer nn_output) {
+static void render_tetris_game_ui(Vertices& vertices, const GameState& game_state) {
+    render_text(vertices, "SCORE", 13.0f, 1.0f, WHITE);
+    render_integer(vertices, game_state.player_score, 18.0f, 2.0f, WHITE);
+
+    render_text(vertices, "LEVEL", 13.0f, 4.0f, WHITE);
+    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+    render_integer(vertices, difficulty_level, 16.0f, 5.0f, WHITE);
+
+    render_text(vertices, "NEXT", 13.0f, 10.0f, WHITE);
+}
+
+static void render_neural_network_output(Vertices& vertices, const NeuralNetwork::OutputLayer nn_output) {
     const f32 left_confidence = clamp(nn_output[1], 0.0f, 1.0f);
-    render_character(scene, '\x11', 0.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, left_confidence});
+    render_character(vertices, '\x11', 0.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, left_confidence});
 
     const f32 down_confidence = clamp(nn_output[0], 0.0f, 1.0f);
-    render_character(scene, '\x1F', 1.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, down_confidence});
+    render_character(vertices, '\x1F', 1.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, down_confidence});
 
     const f32 right_confidence = clamp(nn_output[2], 0.0f, 1.0f);
-    render_character(scene, '\x10', 2.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, right_confidence});
+    render_character(vertices, '\x10', 2.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, right_confidence});
 
     const f32 clockwise_confidence = clamp(nn_output[3], 0.0f, 1.0f);
-    render_character(scene, '\x1A', 3.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, clockwise_confidence});
+    render_character(vertices, '\x1A', 3.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, clockwise_confidence});
 
     const f32 anti_clockwise_confidence = clamp(nn_output[4], 0.0f, 1.0f);
-    render_character(scene, '\x1B', 4.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, anti_clockwise_confidence});
+    render_character(vertices, '\x1B', 4.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, anti_clockwise_confidence});
 }
 
 extern "C" void render_game(const GameMemory& game_memory, const Platform& platform) {
@@ -637,14 +667,19 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     platform.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     platform.glClear(GL_COLOR_BUFFER_BIT);
 
-    Scene scene = {};
+    Vertices vertices = {};
+    vertices.data = reinterpret_cast<Vertex*>(game_memory.transient_storage);
+    Vertices ui_vertices = {};
+    ui_vertices.data = reinterpret_cast<Vertex*>(game_memory.transient_storage) + 4 * MAX_BUFFER_TILE_COUNT;
     switch (game_state.game_mode) {
         case GameMode::PLAYER_CONTROLLED: {
-            render_tetris_game(scene, game_state);
+            render_tetris_game_blocks(vertices, game_state);
+            render_tetris_game_ui(ui_vertices, game_state);
         } break;
 
         case GameMode::AI_CONTROLLED: {
-            render_tetris_game(scene, game_state);
+            render_tetris_game_blocks(vertices, game_state);
+            render_tetris_game_ui(ui_vertices, game_state);
 
             NeuralNetwork::InputLayer nn_input = {};
             game_state_to_neural_network_input(game_state, nn_input);
@@ -652,26 +687,35 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
             NeuralNetwork::OutputLayer nn_output = {};
             feed_forward(game_state.neural_network, nn_input, nn_output);
 
-            render_neural_network_output(scene, nn_output);
+            render_neural_network_output(ui_vertices, nn_output);
         } break;
     }
 
-    platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.vertex_buffer_object);
-    platform.glBufferData(GL_ARRAY_BUFFER, sizeof(scene.vertices), reinterpret_cast<const void*>(scene.vertices), GL_STATIC_DRAW);
-
     // render blocks
+    platform.glBindVertexArray(game_state.vertex_array_object);
+
+    platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.vertex_buffer_object);
+    platform.glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * vertices.index, reinterpret_cast<const void*>(vertices.data), GL_STATIC_DRAW);
+
     platform.glUniform1i(game_state.sampler_uniform_location, 0);
     platform.glActiveTexture(GL_TEXTURE0);
     platform.glBindTexture(GL_TEXTURE_2D, game_state.block_texture_id);
 
-    static constexpr u32 BLOCK_COUNT = Tetris::Grid::ROW_COUNT * Tetris::Grid::COLUMN_COUNT + 8;
-    platform.glDrawElements(GL_TRIANGLES, 6 * BLOCK_COUNT, GL_UNSIGNED_SHORT, nullptr);
+    DEBUG_ASSERT(vertices.index % 4 == 0);
+    const u32 tile_count = vertices.index / 4;
+    platform.glDrawElements(GL_TRIANGLES, 6 * tile_count, GL_UNSIGNED_SHORT, nullptr);
 
-    // render ui
+    // // render ui
+    platform.glBindVertexArray(game_state.ui_vertex_array_object);
+
+    platform.glBindBuffer(GL_ARRAY_BUFFER, game_state.ui_vertex_buffer_object);
+    platform.glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * ui_vertices.index, reinterpret_cast<const void*>(ui_vertices.data), GL_STATIC_DRAW);
+
     platform.glUniform1i(game_state.sampler_uniform_location, 1);
     platform.glActiveTexture(GL_TEXTURE1);
     platform.glBindTexture(GL_TEXTURE_2D, game_state.font_texture_id);
 
-    static constexpr u32 UI_TILE_COUNT = SCENE_TILE_COUNT - BLOCK_COUNT;
-    platform.glDrawElements(GL_TRIANGLES, 6 * UI_TILE_COUNT, GL_UNSIGNED_SHORT, reinterpret_cast<const void*>(6 * BLOCK_COUNT * sizeof(u16)));
+    DEBUG_ASSERT(ui_vertices.index % 4 == 0);
+    const u32 ui_tile_count = ui_vertices.index / 4;
+    platform.glDrawElements(GL_TRIANGLES, 6 * ui_tile_count, GL_UNSIGNED_SHORT, nullptr);
 }

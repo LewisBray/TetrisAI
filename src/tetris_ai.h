@@ -35,6 +35,8 @@ struct Platform {
     void(*close_file)(File& file);
 
     void(*glViewport)(GLint, GLint, GLsizei, GLsizei);
+    void(*glGenVertexArrays)(GLsizei, GLuint*);
+    void(*glBindVertexArray)(GLuint);
     void(*glGenBuffers)(GLsizei, GLuint*);
     void(*glBindBuffer)(GLenum, GLuint);
     void(*glEnableVertexAttribArray)(GLuint);
