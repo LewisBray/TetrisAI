@@ -16,13 +16,16 @@
 
 #define DEBUG_ASSERT(condition) if (!(condition)) platform.show_error_box("Debug Assert", #condition)
 
-enum class GameMode : i32 {
-    PLAYER_CONTROLLED = 0,
-    AI_CONTROLLED = 1
+enum GameMode : i32 {
+    MAIN_MENU = 0,
+    PLAYER_CONTROLLED = 1,
+    AI_CONTROLLED = 2,
+    COUNT = 3
 };
 
 struct GameState {
     GameMode game_mode;
+    GameMode selected_game_mode_in_main_menu;
 
     PlayerInput previous_player_input;
 
@@ -214,7 +217,7 @@ static void train(NeuralNetwork& neural_network, const i8* training_data, const 
 
     for (i32 row = 0; row < NeuralNetwork::HIDDEN_LAYER_SIZE; ++row) {
         for (i32 column = 0; column < NeuralNetwork::INPUT_LAYER_SIZE; ++column) {
-            neural_network.input_to_hidden_weights[row][column] -= LEARNING_RATE * (neural_network_delta.input_to_hidden_weights[row][column]) / batch_size;
+            neural_network.input_to_hidden_weights[row][column] -= LEARNING_RATE * neural_network_delta.input_to_hidden_weights[row][column] / batch_size;
         }
     }
 
@@ -224,7 +227,7 @@ static void train(NeuralNetwork& neural_network, const i8* training_data, const 
 
     for (i32 row = 0; row < NeuralNetwork::OUTPUT_LAYER_SIZE; ++row) {
         for (i32 column = 0; column < NeuralNetwork::HIDDEN_LAYER_SIZE; ++column) {
-            neural_network.hidden_to_output_weights[row][column] -= LEARNING_RATE * (neural_network_delta.hidden_to_output_weights[row][column]) / batch_size;
+            neural_network.hidden_to_output_weights[row][column] -= LEARNING_RATE * neural_network_delta.hidden_to_output_weights[row][column] / batch_size;
         }
     }
 
@@ -241,7 +244,8 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
 
-    game_state.game_mode = GameMode::AI_CONTROLLED;
+    game_state.game_mode = GameMode::MAIN_MENU;
+    game_state.selected_game_mode_in_main_menu = GameMode::PLAYER_CONTROLLED;
 
     platform.glViewport(0, 0, client_width, client_height);
 
@@ -446,6 +450,53 @@ static bool is_actionable_input(const bool pressed, const bool previously_presse
     return held && (updates_in_held_state > 30) && (updates_in_held_state % DELAY) == 0;
 }
 
+static constexpr f32 DELTA_TIME = 1000.0f / 60.0f;
+
+static void update_main_menu(GameState& game_state, const PlayerInput& player_input, const Platform& platform) {
+    const i64 tick_count = platform.query_performance_counter();
+    const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<f32>(game_state.tick_frequency) * 1000.0f;
+    game_state.accumulated_time += frame_duration;
+    game_state.previous_tick_count = tick_count;
+
+    if (!game_state.down_was_pressed && player_input.down && !game_state.previous_player_input.down) {
+        game_state.down_was_pressed = true;
+    }
+
+    if (!game_state.clockwise_was_pressed && player_input.clockwise && !game_state.previous_player_input.clockwise) {
+        game_state.clockwise_was_pressed = true;
+    }
+    
+    if (!game_state.anti_clockwise_was_pressed && player_input.anti_clockwise && !game_state.previous_player_input.anti_clockwise) {
+        game_state.anti_clockwise_was_pressed = true;
+    }
+
+    while (game_state.accumulated_time >= DELTA_TIME) {
+        // TODO: should also be able to use 'up' key
+        // TODO: maybe use arrow keys and/or ENTER?
+        const PlayerInput& previous_player_input = game_state.previous_player_input;
+
+        game_state.updates_down_held_count = update_held_count(player_input.down, previous_player_input.down, game_state.updates_down_held_count);
+        
+        if (game_state.down_was_pressed || is_actionable_input(player_input.down, previous_player_input.down, game_state.updates_down_held_count)) {
+            i32 game_mode = (game_state.selected_game_mode_in_main_menu + 1) % GameMode::COUNT;
+            game_mode = (game_mode < 1) ? 1 : game_mode;
+            game_state.selected_game_mode_in_main_menu = static_cast<GameMode>(game_mode);
+        }
+
+        if (game_state.clockwise_was_pressed || game_state.anti_clockwise_was_pressed) {
+            game_state.game_mode = game_state.selected_game_mode_in_main_menu;
+        }
+
+        game_state.down_was_pressed = false;
+        game_state.clockwise_was_pressed = false;
+        game_state.anti_clockwise_was_pressed = false;
+
+        game_state.accumulated_time -= DELTA_TIME;
+    }
+
+    game_state.previous_player_input = player_input;
+}
+
 static void update_tetris_game(GameState& game_state, const PlayerInput& player_input, const Platform& platform) {
     const i64 tick_count = platform.query_performance_counter();
     const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<f32>(game_state.tick_frequency) * 1000.0f;
@@ -472,7 +523,6 @@ static void update_tetris_game(GameState& game_state, const PlayerInput& player_
         game_state.anti_clockwise_was_pressed = true;
     }
 
-    static constexpr f32 DELTA_TIME = 1000.0f / 60.0f;
     while (game_state.accumulated_time >= DELTA_TIME) {
         // dump game state for training data
         BinaryGameState binary_game_state = {};
@@ -584,6 +634,9 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
     GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
 
     switch (game_state.game_mode) {
+        case GameMode::MAIN_MENU: {
+            update_main_menu(game_state, player_input, platform);
+        } break;
         case GameMode::PLAYER_CONTROLLED: {
             update_tetris_game(game_state, player_input, platform);
         } break;
@@ -606,6 +659,10 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
 
             update_tetris_game(game_state, ai_input, platform);
         } break;
+
+        case GameMode::COUNT: {
+            DEBUG_ASSERT(false);
+        } break;
     }
 }
 
@@ -616,6 +673,17 @@ static void render_grid(Vertices& vertices, const Tetris::Grid& grid) {
             render_tetrimino_block(vertices, static_cast<f32>(x), static_cast<f32>(y), cell);
         }
     }
+}
+
+static void render_main_menu(Vertices& vertices, const GameState& game_state) {
+    static constexpr f32 Y_OFFSETS[GameMode::COUNT] = {0.0f, 5.0f, 8.0f};
+
+    render_text(vertices, "TETRIS AI", 0.0f, 0.0f, WHITE);
+
+    render_text(vertices, "Player controlled", 2.0f, Y_OFFSETS[GameMode::PLAYER_CONTROLLED], WHITE);
+    render_text(vertices, "AI controlled", 2.0f, Y_OFFSETS[GameMode::AI_CONTROLLED], WHITE);
+
+    render_character(vertices, '\x10', 1.0f, Y_OFFSETS[game_state.selected_game_mode_in_main_menu], WHITE);
 }
 
 static void render_tetrimino(Vertices& vertices, const Tetris::Tetrimino& tetrimino) {
@@ -672,6 +740,10 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     Vertices ui_vertices = {};
     ui_vertices.data = reinterpret_cast<Vertex*>(game_memory.transient_storage) + 4 * MAX_BUFFER_TILE_COUNT;
     switch (game_state.game_mode) {
+        case GameMode::MAIN_MENU: {
+            render_main_menu(ui_vertices, game_state);
+        } break;
+
         case GameMode::PLAYER_CONTROLLED: {
             render_tetris_game_blocks(vertices, game_state);
             render_tetris_game_ui(ui_vertices, game_state);
@@ -689,6 +761,10 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
 
             render_neural_network_output(ui_vertices, nn_output);
         } break;
+
+        case GameMode::COUNT: {
+            DEBUG_ASSERT(false);
+        } break;
     }
 
     // render blocks
@@ -702,7 +778,7 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     platform.glBindTexture(GL_TEXTURE_2D, game_state.block_texture_id);
 
     DEBUG_ASSERT(vertices.index % 4 == 0);
-    const u32 tile_count = vertices.index / 4;
+    const GLsizei tile_count = static_cast<GLsizei>(vertices.index / 4);
     platform.glDrawElements(GL_TRIANGLES, 6 * tile_count, GL_UNSIGNED_SHORT, nullptr);
 
     // // render ui
@@ -716,6 +792,6 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     platform.glBindTexture(GL_TEXTURE_2D, game_state.font_texture_id);
 
     DEBUG_ASSERT(ui_vertices.index % 4 == 0);
-    const u32 ui_tile_count = ui_vertices.index / 4;
+    const GLsizei ui_tile_count = static_cast<GLsizei>(ui_vertices.index / 4);
     platform.glDrawElements(GL_TRIANGLES, 6 * ui_tile_count, GL_UNSIGNED_SHORT, nullptr);
 }
