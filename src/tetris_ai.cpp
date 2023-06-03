@@ -20,7 +20,8 @@ enum GameMode : i32 {
     MAIN_MENU = 0,
     PLAYER_CONTROLLED = 1,
     AI_CONTROLLED = 2,
-    COUNT = 3
+    TRAINING_DATA_PLAYBACK = 3,
+    COUNT = 4
 };
 
 struct GameState {
@@ -74,22 +75,28 @@ static i32 calculate_difficulty_level(const i32 total_rows_cleared) {
     return total_rows_cleared / 10 + 1;
 }
 
-static void game_state_to_neural_network_input(const GameState& game_state, NeuralNetwork::InputLayer& input) {
-    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+static void game_state_to_neural_network_input(
+    const i32 total_rows_cleared,
+    const Tetris::Tetrimino::Type next_tetrimino_type,
+    const Tetris::Tetrimino& tetrimino,
+    const Tetris::Grid& grid,
+    NeuralNetwork::InputLayer& input
+) {
+    const i32 difficulty_level = calculate_difficulty_level(total_rows_cleared);
     input[0] = static_cast<f32>(difficulty_level);
-    input[1] = static_cast<f32>(game_state.total_rows_cleared);
-    input[2] = static_cast<f32>(game_state.next_tetrimino.type);
-    input[3] = static_cast<f32>(game_state.tetrimino.type);
+    input[1] = static_cast<f32>(total_rows_cleared);
+    input[2] = static_cast<f32>(next_tetrimino_type);
+    input[3] = static_cast<f32>(tetrimino.type);
 
     for (i32 i = 0; i < 4; ++i) {
-        input[4 + i + 0] = static_cast<f32>(game_state.tetrimino.blocks.top_left_coordinates[i].x);
-        input[4 + i + 1] = static_cast<f32>(game_state.tetrimino.blocks.top_left_coordinates[i].y);
+        input[4 + i + 0] = static_cast<f32>(tetrimino.blocks.top_left_coordinates[i].x);
+        input[4 + i + 1] = static_cast<f32>(tetrimino.blocks.top_left_coordinates[i].y);
     }
 
     i32 i = 12;
     for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
         for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
-            const bool cell_has_block = !Tetris::is_empty_cell(game_state.grid.cells[row][column]);
+            const bool cell_has_block = !Tetris::is_empty_cell(grid.cells[row][column]);
             input[i++] = static_cast<f32>(cell_has_block);
         }
     }
@@ -99,30 +106,32 @@ static constexpr u8 BINARY_GAME_STATE_SIZE = 54;
 using BinaryGameState = i8[BINARY_GAME_STATE_SIZE];
 using BinaryPlayerInput = u16;
 
-static u32 game_state_to_binary_game_state(const GameState& game_state, BinaryGameState& binary_game_state) {
+static u32 game_state_to_binary_game_state(
+    const i32 total_rows_cleared,
+    const Tetris::Tetrimino::Type next_tetrimino_type,
+    const Tetris::Tetrimino& tetrimino,
+    const Tetris::Grid& grid,
+    BinaryGameState& binary_game_state
+) {
     u32 bytes_written = 0;
-    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+    const i32 difficulty_level = calculate_difficulty_level(total_rows_cleared);
     bytes_written += copy_bytes(reinterpret_cast<const i8*>(&difficulty_level), sizeof(difficulty_level), binary_game_state + bytes_written);
-    bytes_written += copy_bytes(reinterpret_cast<const i8*>(&game_state.total_rows_cleared), sizeof(game_state.total_rows_cleared), binary_game_state + bytes_written);
+    bytes_written += copy_bytes(reinterpret_cast<const i8*>(&total_rows_cleared), sizeof(total_rows_cleared), binary_game_state + bytes_written);
 
-    const i8 next_tetrimino_type = static_cast<i8>(game_state.next_tetrimino.type);
-    binary_game_state[bytes_written++] = next_tetrimino_type;
+    binary_game_state[bytes_written++] = static_cast<i8>(next_tetrimino_type);
+    binary_game_state[bytes_written++] = static_cast<i8>(tetrimino.type);
 
-    const i8 tetrimino_type = static_cast<i8>(game_state.tetrimino.type);
-    binary_game_state[bytes_written++] = tetrimino_type;
-
-    const Tetris::Tetrimino::Blocks& tetrimino_blocks = game_state.tetrimino.blocks;
     for (i32 block_index = 0; block_index < 4; ++block_index) {
-        const i8 block_top_left_x = static_cast<i8>(tetrimino_blocks.top_left_coordinates[block_index].x);
+        const i8 block_top_left_x = static_cast<i8>(tetrimino.blocks.top_left_coordinates[block_index].x);
         binary_game_state[bytes_written++] = block_top_left_x;
-        const i8 block_top_left_y = static_cast<i8>(tetrimino_blocks.top_left_coordinates[block_index].y);
+        const i8 block_top_left_y = static_cast<i8>(tetrimino.blocks.top_left_coordinates[block_index].y);
         binary_game_state[bytes_written++] = block_top_left_y;
     }
 
     for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
         u16 binary_row_state = 0;
         for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
-            const bool cell_has_block = !Tetris::is_empty_cell(game_state.grid.cells[row][column]);
+            const bool cell_has_block = !Tetris::is_empty_cell(grid.cells[row][column]);
             binary_row_state |= (static_cast<u16>(cell_has_block) << column);
         }
 
@@ -433,7 +442,8 @@ extern "C" void initialise_game(const GameMemory& game_memory, const i32 client_
         platform.close_file(neural_network_file);
     }
 
-    const bool file_opened = platform.open_file(TRAINING_DATA_FILE_NAME, FileAccessFlags::WRITE, FileCreationFlags::ALWAYS_OPEN, game_state.training_data_file);
+    const FileAccessFlags read_write_access = static_cast<FileAccessFlags>(FileAccessFlags::WRITE | FileAccessFlags::READ);
+    const bool file_opened = platform.open_file(TRAINING_DATA_FILE_NAME, read_write_access, FileCreationFlags::ALWAYS_OPEN, game_state.training_data_file);
     DEBUG_ASSERT(file_opened);
 
     game_state.previous_tick_count = platform.query_performance_counter();
@@ -526,7 +536,14 @@ static void update_tetris_game(GameState& game_state, const PlayerInput& player_
     while (game_state.accumulated_time >= DELTA_TIME) {
         // dump game state for training data
         BinaryGameState binary_game_state = {};
-        const u32 bytes_written = game_state_to_binary_game_state(game_state, binary_game_state);
+        const u32 bytes_written = game_state_to_binary_game_state(
+            game_state.total_rows_cleared,
+            game_state.next_tetrimino.type,
+            game_state.tetrimino,
+            game_state.grid,
+            binary_game_state
+        );
+
         DEBUG_ASSERT(bytes_written == sizeof(binary_game_state));
 
         const BinaryPlayerInput binary_player_input = player_input_to_binary_player_input(player_input);
@@ -629,6 +646,61 @@ static void update_tetris_game(GameState& game_state, const PlayerInput& player_
     game_state.previous_player_input = player_input;
 }
 
+// TODO: this doesn't handle running out of training data to show so it just asserts when it finishes
+static void update_training_data_playback(GameState& game_state, const Platform& platform) {
+    const i64 tick_count = platform.query_performance_counter();
+    const f32 frame_duration = static_cast<f32>(tick_count - game_state.previous_tick_count) / static_cast<f32>(game_state.tick_frequency) * 1000.0f;
+    game_state.accumulated_time += frame_duration;
+    game_state.previous_tick_count = tick_count;
+
+    while (game_state.accumulated_time >= DELTA_TIME) {
+        BinaryGameState binary_game_state = {};
+        platform.read_file_into_buffer(game_state.training_data_file, &binary_game_state, sizeof(binary_game_state));
+
+        u32 bytes_read = 0;
+
+        i32 difficulty_level = 0;
+        bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(difficulty_level), reinterpret_cast<i8*>(&difficulty_level));
+
+        bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(game_state.total_rows_cleared), reinterpret_cast<i8*>(&game_state.total_rows_cleared));
+
+        const Tetris::Tetrimino::Type next_tetrimino_type = static_cast<Tetris::Tetrimino::Type>(binary_game_state[bytes_read++]);
+        game_state.next_tetrimino = construct_tetrimino(next_tetrimino_type, NEXT_TETRIMINO_DISPLAY_LOCATION);
+
+        game_state.tetrimino = {};
+        game_state.tetrimino.type = static_cast<Tetris::Tetrimino::Type>(binary_game_state[bytes_read++]);
+        for (i32 block_index = 0; block_index < 4; ++block_index) {
+            game_state.tetrimino.blocks.top_left_coordinates[block_index].x = static_cast<i32>(binary_game_state[bytes_read++]);
+            game_state.tetrimino.blocks.top_left_coordinates[block_index].y = static_cast<i32>(binary_game_state[bytes_read++]);
+        }
+
+        game_state.grid = {};
+        for (i32 row = 0; row < Tetris::Grid::ROW_COUNT; ++row) {
+            u16 binary_row_state = 0;
+            bytes_read += copy_bytes(binary_game_state + bytes_read, sizeof(binary_row_state), reinterpret_cast<i8*>(&binary_row_state));
+            for (i32 column = 0; column < Tetris::Grid::COLUMN_COUNT; ++column) {
+                const bool cell_has_block = (binary_row_state & (1 << column)) != 0;
+                const f32 colour = static_cast<f32>(cell_has_block);
+                game_state.grid.cells[row][column] = Colour{colour, colour, colour, colour};
+            }
+        }
+
+        BinaryPlayerInput binary_player_input = 0;
+        platform.read_file_into_buffer(game_state.training_data_file, &binary_player_input, sizeof(binary_player_input));
+
+        // this is a bit weird assigning the input to the previous player input but it's not being used for
+        // anything else and didn't want to introduce another member of the game state just for this game mode
+        game_state.previous_player_input = {};
+        game_state.previous_player_input.down = (binary_player_input & 0x01) != 0;
+        game_state.previous_player_input.left = (binary_player_input & 0x02) != 0;
+        game_state.previous_player_input.right = (binary_player_input & 0x04) != 0;
+        game_state.previous_player_input.clockwise = (binary_player_input & 0x08) != 0;
+        game_state.previous_player_input.anti_clockwise = (binary_player_input & 0x10) != 0;
+
+        game_state.accumulated_time -= DELTA_TIME;
+    }
+}
+
 extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& player_input, const Platform& platform) {
     DEBUG_ASSERT(game_memory.permanent_storage != nullptr);
     GameState& game_state = *static_cast<GameState*>(game_memory.permanent_storage);
@@ -637,13 +709,20 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
         case GameMode::MAIN_MENU: {
             update_main_menu(game_state, player_input, platform);
         } break;
+
         case GameMode::PLAYER_CONTROLLED: {
             update_tetris_game(game_state, player_input, platform);
         } break;
 
         case GameMode::AI_CONTROLLED: {
             NeuralNetwork::InputLayer nn_input = {};
-            game_state_to_neural_network_input(game_state, nn_input);
+            game_state_to_neural_network_input(
+                game_state.total_rows_cleared,
+                game_state.next_tetrimino.type,
+                game_state.tetrimino,
+                game_state.grid,
+                nn_input
+            );
 
             NeuralNetwork::OutputLayer nn_output = {};
             feed_forward(game_state.neural_network, nn_input, nn_output);
@@ -658,6 +737,10 @@ extern "C" void update_game(const GameMemory& game_memory, const PlayerInput& pl
             ai_input.anti_clockwise = nn_output[4] > AI_INPUT_THRESHOLD;
 
             update_tetris_game(game_state, ai_input, platform);
+        } break;
+
+        case GameMode::TRAINING_DATA_PLAYBACK: {
+            update_training_data_playback(game_state, platform);
         } break;
 
         case GameMode::COUNT: {
@@ -675,15 +758,16 @@ static void render_grid(Vertices& vertices, const Tetris::Grid& grid) {
     }
 }
 
-static void render_main_menu(Vertices& vertices, const GameState& game_state) {
-    static constexpr f32 Y_OFFSETS[GameMode::COUNT] = {0.0f, 5.0f, 8.0f};
+static void render_main_menu(Vertices& vertices, const GameMode selected_game_mode) {
+    static constexpr f32 Y_OFFSETS[GameMode::COUNT] = {0.0f, 5.0f, 8.0f, 11.0f};
 
     render_text(vertices, "TETRIS AI", 0.0f, 0.0f, WHITE);
 
     render_text(vertices, "Player controlled", 2.0f, Y_OFFSETS[GameMode::PLAYER_CONTROLLED], WHITE);
     render_text(vertices, "AI controlled", 2.0f, Y_OFFSETS[GameMode::AI_CONTROLLED], WHITE);
+    render_text(vertices, "Data playback", 2.0f, Y_OFFSETS[GameMode::TRAINING_DATA_PLAYBACK], WHITE);
 
-    render_character(vertices, '\x10', 1.0f, Y_OFFSETS[game_state.selected_game_mode_in_main_menu], WHITE);
+    render_character(vertices, '\x10', 1.0f, Y_OFFSETS[selected_game_mode], WHITE);
 }
 
 static void render_tetrimino(Vertices& vertices, const Tetris::Tetrimino& tetrimino) {
@@ -694,38 +778,57 @@ static void render_tetrimino(Vertices& vertices, const Tetris::Tetrimino& tetrim
     }
 }
 
-static void render_tetris_game_blocks(Vertices& vertices, const GameState& game_state) {
-    render_grid(vertices, game_state.grid);
-    render_tetrimino(vertices, game_state.tetrimino);
-    render_tetrimino(vertices, game_state.next_tetrimino);
+static void render_score(Vertices& vertices, const i32 score) {
+    render_text(vertices, "SCORE", 13.0f, 1.0f, WHITE);
+    render_integer(vertices, score, 18.0f, 2.0f, WHITE);
 }
 
-static void render_tetris_game_ui(Vertices& vertices, const GameState& game_state) {
-    render_text(vertices, "SCORE", 13.0f, 1.0f, WHITE);
-    render_integer(vertices, game_state.player_score, 18.0f, 2.0f, WHITE);
-
+static void render_difficulty_level(Vertices& vertices, const i32 difficulty_level) {
     render_text(vertices, "LEVEL", 13.0f, 4.0f, WHITE);
-    const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
     render_integer(vertices, difficulty_level, 16.0f, 5.0f, WHITE);
+}
 
+static void render_next_text(Vertices& vertices) {
     render_text(vertices, "NEXT", 13.0f, 10.0f, WHITE);
 }
 
-static void render_neural_network_output(Vertices& vertices, const NeuralNetwork::OutputLayer nn_output) {
+static void render_player_input(Vertices& vertices, const PlayerInput& player_input, const f32 x, const f32 y) {
+    if (player_input.left) {
+        render_character(vertices, '\x11', x + 0.0f, y, WHITE);
+    }
+
+    if (player_input.down) {
+        render_character(vertices, '\x1F', x + 1.0f, y, WHITE);
+    }
+
+    if (player_input.right) {
+        render_character(vertices, '\x10', x + 2.0f, y, WHITE);
+    }
+
+    if (player_input.clockwise) {
+        render_character(vertices, '\x1A', x + 3.0f, y, WHITE);
+    }
+
+    if (player_input.anti_clockwise) {
+        render_character(vertices, '\x1B', x + 4.0f, y, WHITE);
+    }
+}
+
+static void render_neural_network_output(Vertices& vertices, const NeuralNetwork::OutputLayer& nn_output, const f32 x, const f32 y) {
     const f32 left_confidence = clamp(nn_output[1], 0.0f, 1.0f);
-    render_character(vertices, '\x11', 0.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, left_confidence});
+    render_character(vertices, '\x11', x + 0.0f, y, Colour{1.0f, 1.0f, 1.0f, left_confidence});
 
     const f32 down_confidence = clamp(nn_output[0], 0.0f, 1.0f);
-    render_character(vertices, '\x1F', 1.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, down_confidence});
+    render_character(vertices, '\x1F', x + 1.0f, y, Colour{1.0f, 1.0f, 1.0f, down_confidence});
 
     const f32 right_confidence = clamp(nn_output[2], 0.0f, 1.0f);
-    render_character(vertices, '\x10', 2.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, right_confidence});
+    render_character(vertices, '\x10', x + 2.0f, y, Colour{1.0f, 1.0f, 1.0f, right_confidence});
 
     const f32 clockwise_confidence = clamp(nn_output[3], 0.0f, 1.0f);
-    render_character(vertices, '\x1A', 3.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, clockwise_confidence});
+    render_character(vertices, '\x1A', x + 3.0f, y, Colour{1.0f, 1.0f, 1.0f, clockwise_confidence});
 
     const f32 anti_clockwise_confidence = clamp(nn_output[4], 0.0f, 1.0f);
-    render_character(vertices, '\x1B', 4.0f, 0.0f, Colour{1.0f, 1.0f, 1.0f, anti_clockwise_confidence});
+    render_character(vertices, '\x1B', x + 4.0f, y, Colour{1.0f, 1.0f, 1.0f, anti_clockwise_confidence});
 }
 
 extern "C" void render_game(const GameMemory& game_memory, const Platform& platform) {
@@ -741,25 +844,70 @@ extern "C" void render_game(const GameMemory& game_memory, const Platform& platf
     ui_vertices.data = reinterpret_cast<Vertex*>(game_memory.transient_storage) + 4 * MAX_BUFFER_TILE_COUNT;
     switch (game_state.game_mode) {
         case GameMode::MAIN_MENU: {
-            render_main_menu(ui_vertices, game_state);
+            render_main_menu(ui_vertices, game_state.selected_game_mode_in_main_menu);
         } break;
 
         case GameMode::PLAYER_CONTROLLED: {
-            render_tetris_game_blocks(vertices, game_state);
-            render_tetris_game_ui(ui_vertices, game_state);
+            render_tetrimino(vertices, game_state.tetrimino);
+            render_tetrimino(vertices, game_state.next_tetrimino);
+            render_grid(vertices, game_state.grid);
+
+            render_score(ui_vertices, game_state.player_score);
+            const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+            render_difficulty_level(ui_vertices, difficulty_level);
+            render_next_text(ui_vertices);
         } break;
 
         case GameMode::AI_CONTROLLED: {
-            render_tetris_game_blocks(vertices, game_state);
-            render_tetris_game_ui(ui_vertices, game_state);
+            render_tetrimino(vertices, game_state.tetrimino);
+            render_tetrimino(vertices, game_state.next_tetrimino);
+            render_grid(vertices, game_state.grid);
+
+            render_score(ui_vertices, game_state.player_score);
+            const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+            render_difficulty_level(ui_vertices, difficulty_level);
+            render_next_text(ui_vertices);
 
             NeuralNetwork::InputLayer nn_input = {};
-            game_state_to_neural_network_input(game_state, nn_input);
+            game_state_to_neural_network_input(
+                game_state.total_rows_cleared,
+                game_state.next_tetrimino.type,
+                game_state.tetrimino,
+                game_state.grid,
+                nn_input
+            );
 
             NeuralNetwork::OutputLayer nn_output = {};
             feed_forward(game_state.neural_network, nn_input, nn_output);
 
-            render_neural_network_output(ui_vertices, nn_output);
+            render_neural_network_output(ui_vertices, nn_output, 0.0f, 0.0f);
+        } break;
+
+        case GameMode::TRAINING_DATA_PLAYBACK: {
+            render_tetrimino(vertices, game_state.tetrimino);
+            render_tetrimino(vertices, game_state.next_tetrimino);
+            render_grid(vertices, game_state.grid);
+
+            render_score(ui_vertices, 999999);
+            const i32 difficulty_level = calculate_difficulty_level(game_state.total_rows_cleared);
+            render_difficulty_level(ui_vertices, difficulty_level);
+            render_next_text(ui_vertices);
+
+            render_player_input(ui_vertices, game_state.previous_player_input, 0.0f, 0.0f);
+
+            NeuralNetwork::InputLayer nn_input = {};
+            game_state_to_neural_network_input(
+                game_state.total_rows_cleared,
+                game_state.next_tetrimino.type,
+                game_state.tetrimino,
+                game_state.grid,
+                nn_input
+            );
+
+            NeuralNetwork::OutputLayer nn_output = {};
+            feed_forward(game_state.neural_network, nn_input, nn_output);
+
+            render_neural_network_output(ui_vertices, nn_output, 0.0f, 1.0f);
         } break;
 
         case GameMode::COUNT: {
