@@ -5,4 +5,5 @@
 *.dll
 *.exp
 *.lib
+*.rdbg
 neural_network.bin
